@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 find = { }
 
 [project]
-name = "norhc"
+name = "norc"
 dynamic = ["version"]
 requires-python = ">=3.8"
 dependencies = [
@@ -51,19 +51,19 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 [project.urls]
-Homepage = "https://github.com/tuda-parallel/NORHC"
-Documentation = "https://github.com/tuda-parallel/NORHC/docs"
-Repository = "https://github.com/tuda-parallel/NORHC"
-"Bug Tracker" = "https://github.com/tuda-parallel/NORHC/issues"
-Changelog = "https://github.com/tuda-parallel/NORHC/blob/master/CHANGELOG.md"
+Homepage = "https://github.com/tuda-parallel/NORC"
+Documentation = "https://github.com/tuda-parallel/NORC/docs"
+Repository = "https://github.com/tuda-parallel/NORC"
+"Bug Tracker" = "https://github.com/tuda-parallel/NORC/issues"
+Changelog = "https://github.com/tuda-parallel/NORC/blob/master/CHANGELOG.md"
 
 
 [project.scripts]
 # Standard Scripts (always available)
-norhc_gui = "norhc.analysis_ui:main"
-norhc_analyze = "norhc.core.analyze:main"
-norhc_plot = "norhc.core.plot_rel_dev:main"
-norhc_rank = "norhc.core.score:main"
+norc_gui = "norc.analysis_ui:main"
+norc_analyze = "norc.core.analyze:main"
+norc_plot = "norc.core.plot_rel_dev:main"
+norc_rank = "norc.core.score:main"
 # predictor = "ftio.cli.predictor:main"
 
 
@@ -88,7 +88,7 @@ development-libs = [
 
 
 [tool.setuptools.dynamic]
-version = { attr = "norhc.__version__" }
+version = { attr = "norc.__version__" }
 readme = { file = ["README.md"] }
 
 [tool.pytest.ini_options]
