@@ -1,0 +1,50 @@
+#!/bin/bash
+
+fakeslurm_dir=$(dirname $0)
+
+if [ ! -f $fakeslurm_dir/next_job ]; then
+  echo 0 > $fakeslurm_dir/next_job
+fi
+
+job_id=$(cat "$fakeslurm_dir/next_job")
+echo $((job_id + 1)) > $fakeslurm_dir/next_job
+
+use_arrays=false
+left=0
+right=0
+
+
+
+# Get sbatch options
+while : ; do
+  if [[ $1 =~ "--array="* ]]; then
+    arr=$(echo $1 | sed "s/--array=//g; s/-/ /g")
+    left=$(get_positional 1 arr)
+    right=$(get_positional 1 arr)
+    use_arrays=true
+  fi
+  if [[ $1 =~ "--time="* ]]; then
+    time_limit=$(echo $1 | sed "s/--time=//g; s/-/ /g")
+  fi
+  if [[ ! $1 =~ "--"* ]]; then
+    break
+  fi
+  shift
+done
+
+echo "submitted batch job $job_id"
+
+if [ use_arrays = true ]; then
+  for array_id in seq $left $right; do
+    echo "[$job_id $array_id] $1"
+    #SLURM_ARRAY_JOB_ID=$job_id SLURM_ARRAY_TASK_ID=$array_id $1
+    if [ $? -ne 0 ]; then
+      exit $?
+    fi
+  done
+else
+
+echo "[$job_id] $1"
+SLURM_JOB_ID=$job_id $1 
+exit $?
+fi

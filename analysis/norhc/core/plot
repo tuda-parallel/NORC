@@ -1,0 +1,5 @@
+#!/bin/bash
+
+homedir=$(dirname $(readlink -f "${BASH_SOURCE[0]}"))
+source "$homedir/setup_environment"
+python "$homedir/plot_rel_dev.py" $@

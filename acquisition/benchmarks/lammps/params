@@ -1,0 +1,10 @@
+# Every dimension is multiplied by 20 by the LAMMPS script. Don't make the parameter list look like the name unless you want to run a really big test.
+x20y20z20  -sf omp -in in.lj -var x 1  -var y 1 -var z 1
+x40y20z20  -sf omp -in in.lj -var x 2  -var y 1 -var z 1
+x80y20z20  -sf omp -in in.lj -var x 4  -var y 1 -var z 1
+x160y20z20 -sf omp -in in.lj -var x 8 -var y 1 -var z 1
+
+x100y100z100 -sf omp -in in.lj -var x 5  -var y 5 -var z 5
+x200y100z100 -sf omp -in in.lj -var x 10 -var y 5 -var z 5
+x400y100z100 -sf omp -in in.lj -var x 20 -var y 5 -var z 5
+x800y100z100 -sf omp -in in.lj -var x 40 -var y 5 -var z 5

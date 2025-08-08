@@ -1,0 +1,48 @@
+#!/bin/bash
+homedir=$(dirname $(readlink -f "${BASH_SOURCE[0]}"))
+
+python_version=$(python3 --version 2>&1)
+if [ $? -eq 0 ]; then
+  python_cmd="python3"
+else
+  python_version=$(python --version)
+  if [ $? -eq 0 ]; then
+    case $python_version in
+      "Python 3"*)
+        python_cmd="python";;
+      *)
+        echo "Python 3 is required." 1>&2
+        exit 1;;
+    esac
+  else
+    echo "Python could not be found." 1>&2
+    exit 1
+  fi
+fi
+
+export python=$python_cmd
+
+activate_venv () {
+  if [ -d "$homedir/.venv/Scripts" ]; then
+    source "$homedir/.venv/Scripts/activate"
+    if [ $? -ne 0 ]; then exit 1; fi
+  else
+    source "$homedir/.venv/bin/activate"
+    if [ $? -ne 0 ]; then exit 1; fi
+  fi
+}
+
+
+if [ ! -d "$homedir/.venv" ]; then
+  echo "Setting up environment..."
+  $python_cmd -m venv "$homedir/.venv"
+  if [ $? -ne 0 ]; then exit 1; fi
+  activate_venv
+  $python_cmd -m pip install numpy matplotlib PySide6 termcolor pycubexr tqdm
+  if [ $? -ne 0 ]; then exit 1; fi
+  echo "Environment ready."
+  echo -e "\n\n"
+else
+  activate_venv
+fi
+

@@ -1,0 +1,9 @@
+x20y20z20  -nx 20 -ny 20 -nz 20
+x40y20z20  -nx 40 -ny 20 -nz 20
+x80y20z20  -nx 80 -ny 20 -nz 20
+x160y20z20 -nx 160 -ny 20 -nz 20
+
+x10y10z10 -nx 10 -ny 10 -nz 10
+x10y10z20 -nx 10 -ny 10 -nz 20
+x10y10z40 -nx 10 -ny 10 -nz 40
+x10y10z80 -nx 10 -ny 10 -nz 80

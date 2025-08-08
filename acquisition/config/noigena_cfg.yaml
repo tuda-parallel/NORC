@@ -1,0 +1,172 @@
+## This file is part of the NOIGENA software
+##
+## Copyright (c) 2021, 2022
+## Forschungszentrum Juelich GmbH, Germany
+##
+## This software may be modified and distributed under the terms of
+## a GPL version 2 license. See the COPYING file in the package base
+## directory for details.
+##
+##
+## FILE_BEGIN
+##
+
+#------------------------------------------------------------------------------#
+
+Benchmarks_Configurations:
+  Stream:
+    - verbosity: 0
+    - iterations: 10
+    - omp_use: TRUE
+    - cfg_set:
+      - cfg_set_name: LOW_NOISE
+      - array_size: 40000
+
+    - cfg_set:
+      - cfg_set_name: 2
+      - array_size: 50000
+
+  Linktest:
+    - verbosity: 0
+    - SIONlib: true
+    - cfg_set:
+      - cfg_set_name: MEDIUM_NOISE
+      - randomize_buffers: 0
+      - check_buffers: 0
+      - do_alltoall: 1
+      - do_bidir: 1
+      - do_unidir: 0
+      - do_mix: 0
+      - do_serial: 1
+      - do_nosion: 1        # SIONlib is a prerequisite
+      - do_sion_par: 0      # SIONlib is a prerequisite
+      - do_use_gpus: 0
+      - do_bisection: 0
+      - use_multi_buf: 0
+      - do_group_processes_by_hostname: 0
+      - num_msg: 100
+      - num_warmup_msg: 10
+      - len_msg: 16777216 #13700 #bytes
+      - buf_mt_seed: 0
+      - num_multi_buf: 0
+      - num_randomize_tasks: 0
+      - seed_randomize_tasks: 0
+      - seed_randomize_steps: 0
+      - max_stest: 0
+      - min_iterations: 0
+      - output: "pingpong_results_bin.sion" # SIONlib is a prerequisite
+#      - outputfile_variant: a /* TODO_5 */
+
+  Ior:
+    - verbosity: 0
+    - api: MPIIO   # POSIX, MPIIO or all (for both) #compilation input (not runtime cfg)
+    - cfg_set:
+      - cfg_set_name: LOW_NOISE
+      - numTasks: 2
+      - repetitions: 10
+      - repCounter: -1
+      - multiFile: 0
+      - interTestDelay: 0
+      - filePerProc: TRUE
+      - reorderTasks: TRUE
+      - segmentCount: 16
+      - blockSize: 16m
+      - transferSize: 1m
+
+
+  Mdtest:
+    - verbosity: 0
+    - cfg_set:
+      - cfg_set_name: MEDIUM_NOISE
+      - branch_factor: 1
+      - barriers: 1
+      - collective_creates: 0
+      - create_only: 1         # create
+      - test_dir: "/p/project/ccstpa/daoud2/programs/proj_extranoise/noise_generation/hifis_noigena/noigena-tool/testing/NOIGENA_v3/TeaLeaf/mdtest_dir/"
+      - dirs_only: 1
+      - read_bytes: 1024
+      - read_only: 1
+      - first: 1
+      - files_only: 0
+      - iterations: 10
+      - items_per_dir: 10
+      - last: 1
+      - leaf_only: 0
+      - items: 0
+      - nstride: 0
+      - pre_delay: 2
+      - remove_only: 1         # delete
+      - random_seed: 150
+      - stride: 1
+      - shared_file: 0
+      - time_unique_dir_overhead: 1
+      - stat_only: 1
+      - unique_dir_per_task: 1
+      - write_bytes: 1024
+      - sync_file: 0
+      - depth: 3
+
+#------------------------------------------------------------------------------#
+
+NOISE_PATTERNS:
+
+  PATTERN_RND:
+    Sequence:
+      - RANDOM_NOISE:
+          Seed: 53          # optional. provide to get same random noise
+          # Note: time configurations still should be provided to obtain same results with seed
+          TIME: 10000         # time in seconds
+          MEMORY_NOISE: 25
+          NETWORK_NOISE: 25
+          IO_NOISE: 25
+          NO_NOISE: 25
+
+  PATTERN_Repeat:
+    Sequence:
+    - REPEATED_NOISE:
+        REPEAT: inf
+        Sequence:
+          - NETWORK_NOISE: MEDIUM_NOISE 2
+          - NO_NOISE: NULL 2
+
+  PATTERN_66:
+    Sequence:
+      - MEMORY_NOISE: LOW_NOISE 5
+      - NO_NOISE: NULL 1
+      - MEMORY_NOISE: 2 5
+      - IO_NOISE: LOW_NOISE 2
+      - NO_NOISE: NULL 1
+      - NETWORK_NOISE: MEDIUM_NOISE 1
+      - BUSY_WAIT_NOISE: NULL 2
+
+  PATTERN_SILENCE:
+    Sequence:
+    - REPEATED_NOISE:
+        REPEAT: inf
+        Sequence:
+          - NO_NOISE: NULL 1
+
+  PATTERN_M2S2:
+    Sequence:
+    - REPEATED_NOISE:
+        REPEAT: inf
+        Sequence:
+          - MEMORY_NOISE: 2 2
+          - NO_NOISE: NULL 2
+
+  PATTERN_N2S2:
+    Sequence:
+    - REPEATED_NOISE:
+        REPEAT: inf
+        Sequence:
+          - NETWORK_NOISE: MEDIUM_NOISE 2 2
+          - NO_NOISE: NULL 2
+
+  PATTERN_M2N2S2:
+    Sequence:
+    - REPEATED_NOISE:
+        REPEAT: inf
+        Sequence:
+          - MEMORY_NOISE: 2 2
+          - NETWORK_NOISE: MEDIUM_NOISE 2 2
+          - NO_NOISE: NULL 2

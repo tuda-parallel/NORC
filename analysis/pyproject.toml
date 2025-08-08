@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages]
+find = { }
+
+[project]
+name = "norhc"
+dynamic = ["version"]
+requires-python = ">=3.8"
+dependencies = [
+  "numpy~=1.24",
+  "matplotlib~=3.7",
+  "PySide6~=6.6",
+  "termcolor~=2.4.0",
+  "pycubexr~=2.0.1",
+  "tqdm~=4.67"
+]
+authors = [
+    { name = "Lukas Fuchs", email = "lukas.fuchs@stud.tu-darmstadt.de" },
+    { name = "Ahmad Tarraf", email = "ahmad.tarraf@tu-darmstadt.de" },
+    { name = "Alexander Geiß", email = "alexander.geiss1@tu-darmstadt.de" }
+    ]
+maintainers = [
+    { name = "Lukas Fuchs", email = "lukas.fuchs@stud.tu-darmstadt.de" },
+    { name = "Ahmad Tarraf", email = "ahmad.tarraf@tu-darmstadt.de" },
+    { name = "Alexander Geiß", email = "alexander.geiss1@tu-darmstadt.de" }
+]
+description = "Noise Resilient Hardware Counters in HPC"
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = ["hardware counter", "noise", "HPC"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+[project.urls]
+Homepage = "https://github.com/tuda-parallel/NORHC"
+Documentation = "https://github.com/tuda-parallel/NORHC/docs"
+Repository = "https://github.com/tuda-parallel/NORHC"
+"Bug Tracker" = "https://github.com/tuda-parallel/NORHC/issues"
+Changelog = "https://github.com/tuda-parallel/NORHC/blob/master/CHANGELOG.md"
+
+
+[project.scripts]
+# Standard Scripts (always available)
+norhc_gui = "norhc.analysis_ui:main"
+norhc_analyze = "norhc.core.analyze:main"
+norhc_plot = "norhc.core.plot_rel_dev:main"
+norhc_rank = "norhc.core.score:main"
+# predictor = "ftio.cli.predictor:main"
+
+
+[project.optional-dependencies]
+# external-libs = [
+#     "fastdtw",
+#     "dash",
+#     "dash_extensions",
+#     "plotly_resampler",
+#     "trace_updater",
+#     "flask",
+# ]
+
+development-libs = [
+    "black",
+    "isort",
+    "nbstripout",
+    #    "flake8"
+]
+
+[project.gui-scripts]
+
+
+[tool.setuptools.dynamic]
+version = { attr = "norhc.__version__" }
+readme = { file = ["README.md"] }
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+skip-string-normalization = false
+
+[tool.isort]
+profile = "black"
+line_length = 90
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+
+[tool.flake8]
+max-line-length = 90
+extend-ignore = ["E203", "W503"]  # Black compatibility
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".venv",
+    "env",
+]

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+if [ $(echo "$@" | grep "NOIGENA" | wc -l) = 0 ]; then
+  printf " - %s\n" "$SCOREP_EXPERIMENT_DIRECTORY"
+fi
