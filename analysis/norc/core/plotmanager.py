@@ -32,7 +32,6 @@ class PlotManager(QObject):
         self.experiment_root = ""
 
         self.plot_settings = prd.plot_settings()
-        self.plot_settings.font_size = 10
         self.plot_settings.selection.lump_params = True
         self.plot_settings.selection.lump_resources = True
 
