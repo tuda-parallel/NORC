@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -13,7 +13,7 @@ from copy import copy
 
 from pycubexr import CubexParser
 from tqdm import tqdm
-from norhc.helpers.util import dir_info, warn, iterate_measurements, callpath_data, write_measurement
+from norc.helpers.util import dir_info, warn, iterate_measurements, callpath_data, write_measurement
 
 flt_isdir = lambda f: f.is_dir() and not f.name.startswith(".")
 

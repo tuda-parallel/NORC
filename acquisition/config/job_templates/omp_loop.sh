@@ -1,7 +1,7 @@
 # Batch prefixes from system and benchmark go here.
 #SBATCH --partition=§partition
 #SBATCH --account=§budget
-#SBATCH --job-name=HCNI(§partition)
+#SBATCH --job-name=NORC(§partition)
 #SBATCH --output=§status_out/%j.out
 #SBATCH --error=§status_err/%j.err
 #SBATCH --nodes §nodes

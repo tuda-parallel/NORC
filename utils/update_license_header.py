@@ -2,7 +2,7 @@ import datetime
 import os
 
 license_header = """
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) {years}, Technical University of Darmstadt, Germany
 #

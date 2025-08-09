@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2025, Technical University of Darmstadt, Germany
 #
@@ -6,7 +6,7 @@
 # See the LICENSE file in the base directory for details.
 
 import os
-from norhc.core.plotmanager import PlotManager
+from norc.core.plotmanager import PlotManager
 
 
 class ApplicationState:

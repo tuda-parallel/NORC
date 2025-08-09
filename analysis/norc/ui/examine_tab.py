@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -8,7 +8,7 @@
 from PySide6.QtWidgets import QWidget, QSplitter, QVBoxLayout
 from PySide6.QtGui import Qt
 
-from norhc.ui.chart import chart
+from norc.ui.chart import chart
 
 
 class examine_tab(QWidget):

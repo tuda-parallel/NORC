@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -11,10 +11,10 @@ from copy import copy
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox
 from PySide6.QtCore import Qt
 
-from norhc.helpers.util import experiment_filter, available_measurements
-from norhc.ui.examine_tab import examine_tab
-from norhc.ui.ratings_tab import ratings_tab
-from norhc.core.analyze import analyze_experiment
+from norc.helpers.util import experiment_filter, available_measurements
+from norc.ui.examine_tab import examine_tab
+from norc.ui.ratings_tab import ratings_tab
+from norc.core.analyze import analyze_experiment
 
 
 class main_window(QMainWindow):

@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -16,9 +16,9 @@ import time
 
 from PySide6.QtCore import QObject, Signal
 
-import norhc.core.plot_rel_dev as prd
-from norhc.core.score import score, score_group
-from norhc.helpers.util import measurement_info, available_measurements, experiment_filter, warn
+import norc.core.plot_rel_dev as prd
+from norc.core.score import score, score_group
+from norc.helpers.util import measurement_info, available_measurements, experiment_filter, warn
 
 
 class PlotManager(QObject):

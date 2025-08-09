@@ -1,7 +1,7 @@
 
 #SBATCH --partition=§partition
 #SBATCH --account=§budget
-#SBATCH --job-name=HCNI(§partition)
+#SBATCH --job-name=NORC(§partition)
 #SBATCH --output=§status_out/%A_%a.out
 #SBATCH --error=§status_err/%A_%a.err
 #SBATCH --nodes §nodes
