@@ -27,6 +27,7 @@ jobs:
 
       - name: Install NORC and dependencies
         run: |
+          cd analysis
           python -m venv .venv
           source .venv/bin/activate
           pip install --upgrade pip
