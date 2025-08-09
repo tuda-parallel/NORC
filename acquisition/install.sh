@@ -133,7 +133,7 @@ if $do_install; then
 
     # Score-P with PAPI
     print_info "Installing Score-P with Spack."
-    spack install scorep@$SCOREP_VERSION $SPACK_VERSION_SUFFIX +papi +mpi
+    spack install scorep@$SCOREP_VERSION +papi +mpi $SPACK_VERSION_SUFFIX
     check_failure "Failed to install Score-P with Spack."
     spack load scorep@$SCOREP_VERSION $SPACK_VERSION_SUFFIX
     check_failure "Spack could install Score-P but not load it."
