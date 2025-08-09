@@ -1,6 +1,6 @@
 #!/bin/bash
 #set -x
-app_name="HWCNI"
+app_name="NORC"
 
 export NEWT_COLORS='
 root=white,blue
@@ -111,7 +111,7 @@ choosebox() {
 choose_multiple() {
   if $has_whiptail; then
     IFS=" " read -r -a size <<<"$(dimensions "$1")"
-    result=$(whiptail --title "$app_name configuration assistant" --checklist "$1" $((size[0] + $# / 2)) $((size[1] + 10)) $(($# / 2)) "${@:2}" 3>&1 1>&2 2>&3)
+    result=$(whiptail --title "$app_name configuration assistant" --checklist "$1" $((size[0] + ($# / 3))) $((size[1] + 10)) $(($# / 3)) "${@:2}" 3>&1 1>&2 2>&3)
     ec=$?
     REPLY=($(echo $result | tr -d '"'))
     return $ec
