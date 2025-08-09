@@ -71,7 +71,7 @@ class chart_controls(QWidget):
         form.addRow(QLabel("Noise Pattern"), self.cb_noise)
 
         self.cb_metric = QComboBox(selection_container)
-        form.addRow(QLabel("Metric"), self.cb_metric)
+        form.addRow(QLabel("Counter"), self.cb_metric)
 
         form.addRow(QWidget(), QWidget())
         form.addRow(QLabel("Scores:"), QWidget())
@@ -107,6 +107,20 @@ class chart_controls(QWidget):
         self.selection_changed.emit()
 
     def update_ui(self):
+        if self.score is None:
+            self.lb_score_deviation.setText("-")
+            self.lb_score_susceptibility.setText("-")
+            self.lb_rating.setText("-")
+        else:
+            self.lb_score_deviation.setText(f"{max(self.score.dev_ref, self.score.dev_noisy):.4f}%")
+            self.lb_score_susceptibility.setText(f"{self.score.susceptibility:.4f}")
+
+            self.lb_rating.setText(f"{self.score.rel_resilience:.2f}")
+
+            color = score_color(self.score.rel_resilience)
+            hexcolor = QColor(color[0] * 255, color[1] * 255, color[2] * 255).name()
+            self.lb_rating.setStyleSheet(f"QLabel {{ color : {hexcolor}; }}")
+
         if self.currently_updating_:
             return
         self.currently_updating_ = True
@@ -123,20 +137,6 @@ class chart_controls(QWidget):
         self.cb_system.setCurrentText(self.plot_info.system)
         self.cb_noise.setCurrentText(self.plot_info.noise_pattern)
         self.cb_metric.setCurrentText(self.plot_info.counter)
-
-        if self.score is None:
-            self.lb_score_deviation.setText("-")
-            self.lb_score_susceptibility.setText("-")
-            self.lb_rating.setText("-")
-        else:
-            self.lb_score_deviation.setText(f"{max(self.score.dev_ref, self.score.dev_noisy):.4f}%")
-            self.lb_score_susceptibility.setText(f"{self.score.susceptibility:.4f}")
-
-            self.lb_rating.setText(f"{self.score.rel_resilience:.2f}")
-
-            color = score_color(self.score.rel_resilience)
-            hexcolor = QColor(color[0] * 255, color[1] * 255, color[2] * 255).name()
-            self.lb_rating.setStyleSheet(f"QLabel {{ color : {hexcolor}; }}")
 
         self.currently_updating_ = False
 
@@ -191,8 +191,8 @@ class chart(QSplitter):
 
     # Check if a new result fits this chart's info and plot it if applicable
     def handle_result(self, a: util.measurement_info):
-        self.update_score()
         b = self.controls.plot_info
+        self.update_score()
         if (
             a.benchmark == b.benchmark
             and a.system == b.system
@@ -203,6 +203,7 @@ class chart(QSplitter):
 
     # Try to create the plot from the available plot info
     def update_plot(self):
+        self.update_score()
         self.fig.clear()
         self.ax.clear()
         self.fig.add_axes(self.ax)
@@ -212,4 +213,4 @@ class chart(QSplitter):
         self.fig.canvas.draw_idle()
 
     def update_score(self):
-        self.controls.set_score(self.plt_mgr.get_score(self.controls.plot_info))
+        self.controls.set_score(self.plt_mgr.request_score(self.controls.plot_info))

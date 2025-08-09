@@ -32,6 +32,7 @@ class PlotManager(QObject):
         self.experiment_root = ""
 
         self.plot_settings = prd.plot_settings()
+        self.plot_settings.font_size = 10
         self.plot_settings.selection.lump_params = True
         self.plot_settings.selection.lump_resources = True
 
@@ -191,35 +192,30 @@ class PlotManager(QObject):
         # print(f"plot  {info.key()}\t done in {t_end - t_start}s")
 
     def score_calculation_(self, info: measurement_info, config_version):
-        try:
-            # Only start a calculation if the results would still be up to date.
-            with self.config_mutex_:
-                if config_version != self.config_version_:
-                    return
-
-            if info.noise_pattern == "NO_NOISE":
-                # Score request for NO_NOISE rejected. Scores are always for a noisy/reference pair.
+        # Only start a calculation if the results would still be up to date.
+        with self.config_mutex_:
+            if config_version != self.config_version_:
                 return
 
-            t_start = time.process_time()
+        if info.noise_pattern == "NO_NOISE":
+            # Score request for NO_NOISE rejected. Scores are always for a noisy/reference pair.
+            return
 
-            scr = score(info, self.infos[info.noiseless_key()], self.plot_settings.selection)
+        t_start = time.process_time()
 
-            # Only write the result if it still fits the configuration.
-            with self.config_mutex_:
-                if config_version == self.config_version_:
-                    key = info.key()
-                    self.scores.put(key, scr)
-                    if key in self.pending_scores_:
-                        del self.pending_scores_[key]
-                    self.score_ready.emit(info)
+        scr = score(info, self.infos[info.noiseless_key()], self.plot_settings.selection)
 
-            t_end = time.process_time()
-            duration = t_end - t_start
-            print(f"score {info.key()}\t done in {t_end - t_start}s")
-        except Exception as e:
-            print(e)
-            raise e
+        # Only write the result if it still fits the configuration.
+        with self.config_mutex_:
+            if config_version == self.config_version_:
+                key = info.key()
+                self.scores.put(key, scr)
+                if key in self.pending_scores_:
+                    del self.pending_scores_[key]
+                self.score_ready.emit(info)
+
+        t_end = time.process_time()
+        # print(f"score {info.key()}\t done in {t_end - t_start}s")
 
     def request_calculation_(
         self,
@@ -281,13 +277,19 @@ class PlotManager(QObject):
         )
 
     def request_score(self, info: measurement_info):
-        return self.request_calculation_(
+        key = info.key()
+        with self.config_mutex_:
+            if key in self.scores.scores:
+                return self.scores.scores[key]
+        scr, _ = self.request_calculation_(
             self.score_calculation_,
             info,
             self.scores.scores,
             [self.pending_scores_],
             self.pending_scores_,
         )
+
+        return scr
 
     # Plots the deviation diagram to a specified matplotlib axis
     def get_plot(self, ax, info: measurement_info):
@@ -301,12 +303,6 @@ class PlotManager(QObject):
         max_deviation = max(noisy.max_deviation, reference.max_deviation)
         if max_deviation < 100:
             ax.set_xlim(-self.plot_settings.extended_zero_area, 1000)
-
-    def get_score(self, info: measurement_info):
-        scr, _ = self.request_score(info)
-        if scr is None:
-            return None
-        return scr
 
     def clear_cache(self):
         self.cached_plots = {}
