@@ -15,6 +15,7 @@ from norc.helpers.util import experiment_filter, available_measurements
 from norc.ui.examine_tab import examine_tab
 from norc.ui.ratings_tab import ratings_tab
 from norc.core.analyze import analyze_experiment
+from norc.ui.ui_util import add_v_spacer, clear_widget
 
 
 class main_window(QMainWindow):
@@ -25,8 +26,11 @@ class main_window(QMainWindow):
         self.ui.tw_modes.addTab(ratings_tab(appstate), "Ratings")
         self.ui.tw_modes.addTab(examine_tab(appstate), "Examine")
 
-        self.filter_boxes = {"benchmark": [], "system": [], "noise": [], "metric": []}
+        self.filter_boxes = {"benchmark": [], "system": [], "noise": [], "counter": []}
         self._filtering_in_progress = False
+
+        self.ui.sb_thr_contrib.setValue(1)
+        self.ui.sb_thr_visits.setValue(100)
 
         self.ui.cb_plotmode.currentTextChanged.connect(self.update_config)
         self.ui.sb_colorbands.editingFinished.connect(self.update_config)
@@ -107,11 +111,13 @@ class main_window(QMainWindow):
         for cb in self.filter_boxes["noise"]:
             if cb.isChecked():
                 noises += f"{cb.text()},"
-        for cb in self.filter_boxes["metric"]:
+        for cb in self.filter_boxes["counter"]:
             if cb.isChecked():
                 metrics += f"{cb.text()},"
 
-        self.appstate.plt_mgr.set_filter(experiment_filter(benchmarks, systems, noises, metrics))
+        self.appstate.plt_mgr.set_filter(
+            experiment_filter(benchmarks, systems, noises, metrics)
+        )
         self._filtering_in_progress = False
 
     def update_filter_ui(self):
@@ -128,7 +134,7 @@ class main_window(QMainWindow):
             for cb in l:
                 cb.deleteLater()
 
-        self.filter_boxes = {"benchmark": [], "system": [], "noise": [], "metric": []}
+        self.filter_boxes = {"benchmark": [], "system": [], "noise": [], "counter": []}
 
         # Check if there is anything to load
         deviation_dir = os.path.join(plt_mgr.experiment_root, "result", ".deviations")
@@ -150,6 +156,11 @@ class main_window(QMainWindow):
         # Special noise patterns are always permitted by filters
         noises.discard("NO_NOISE")
         noises.discard("ALL_NOISE")
+
+        clear_widget(self.ui.pg_flt_benchmark)
+        clear_widget(self.ui.pg_flt_system)
+        clear_widget(self.ui.pg_flt_noise)
+        clear_widget(self.ui.pg_flt_metric)
 
         self.ui.pg_flt_benchmark.setVisible(len(benchmarks) > 1)
         self.ui.pg_flt_system.setVisible(len(systems) > 1)
@@ -182,4 +193,9 @@ class main_window(QMainWindow):
             cb.setChecked(plt_mgr.plot_settings.selection.filter.flt_counter(it))
             cb.stateChanged.connect(self.apply_filters)
             self.ui.pg_flt_metric.layout().addWidget(cb)
-            self.filter_boxes["metric"].append(cb)
+            self.filter_boxes["counter"].append(cb)
+
+        add_v_spacer(self.ui.pg_flt_benchmark)
+        add_v_spacer(self.ui.pg_flt_system)
+        add_v_spacer(self.ui.pg_flt_noise)
+        add_v_spacer(self.ui.pg_flt_metric)

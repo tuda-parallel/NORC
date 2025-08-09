@@ -42,7 +42,7 @@ class score_cell(QTableWidgetItem):
         self.setForeground(QColor(0, 0, 0))
 
     def update_score(self):
-        score = self.plt_mgr.get_score(self.info)
+        score = self.plt_mgr.request_score(self.info)
         if score is None or np.isinf(score.rel_resilience):
             self.setText("-")
             self.set_bg(QColor(255, 255, 255))
@@ -65,8 +65,8 @@ class score_table(QTableWidget):
         super().__init__(parent)
         self.plt_mgr = plt_mgr
         self.selected = None
-        self.outer_dims = ["benchmark", "system"]
-        self.inner_dims = ["metric", "noise"]
+        self.outer_dims = ["Benchmark", "System"]
+        self.inner_dims = ["Counter", "Noise"]
 
         self.plt_mgr.reconfigured.connect(self.update_table)
 
@@ -83,10 +83,10 @@ class score_table(QTableWidget):
     def dim_items(self, dim_id: str):
         return sorted(
             {
-                "benchmark": self.plt_mgr.benchmarks,
-                "system": self.plt_mgr.systems,
-                "metric": self.plt_mgr.metrics,
-                "noise": self.plt_mgr.noise_patterns.difference({"NO_NOISE"}),
+                "Benchmark": self.plt_mgr.benchmarks,
+                "System": self.plt_mgr.systems,
+                "Counter": self.plt_mgr.metrics,
+                "Noise": self.plt_mgr.noise_patterns.difference({"NO_NOISE"}),
             }[dim_id]
         )
 
@@ -101,10 +101,10 @@ class score_table(QTableWidget):
 
         # Construct a plot info from the dimension mapping
         info = util.measurement_info()
-        info.benchmark = dimensions["benchmark"]
-        info.system = dimensions["system"]
-        info.counter = dimensions["metric"]
-        info.noise_pattern = dimensions["noise"]
+        info.benchmark = dimensions["Benchmark"]
+        info.system = dimensions["System"]
+        info.counter = dimensions["Counter"]
+        info.noise_pattern = dimensions["Noise"]
 
         return info
 

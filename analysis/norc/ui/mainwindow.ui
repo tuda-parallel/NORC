@@ -229,6 +229,12 @@
        </item>
        <item>
         <widget class="QGroupBox" name="groupBox_5">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
          <property name="title">
           <string>Filters</string>
          </property>
@@ -243,8 +249,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>162</width>
-               <height>65</height>
+               <width>158</width>
+               <height>124</height>
               </rect>
              </property>
              <attribute name="label">
@@ -257,8 +263,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>162</width>
-               <height>65</height>
+               <width>158</width>
+               <height>124</height>
               </rect>
              </property>
              <attribute name="label">
@@ -271,8 +277,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>162</width>
-               <height>65</height>
+               <width>158</width>
+               <height>124</height>
               </rect>
              </property>
              <attribute name="label">
@@ -285,12 +291,12 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>162</width>
-               <height>65</height>
+               <width>158</width>
+               <height>124</height>
               </rect>
              </property>
              <attribute name="label">
-              <string>Metric</string>
+              <string>Counter</string>
              </attribute>
              <layout class="QVBoxLayout" name="verticalLayout_7"/>
             </widget>
@@ -298,19 +304,6 @@
           </item>
          </layout>
         </widget>
-       </item>
-       <item>
-        <spacer name="verticalSpacer">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>40</height>
-          </size>
-         </property>
-        </spacer>
        </item>
       </layout>
      </widget>
@@ -363,7 +356,8 @@
   </widget>
   <action name="action_open">
    <property name="icon">
-    <iconset theme="document-open"/>
+    <iconset theme="document-open">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Open experiment</string>

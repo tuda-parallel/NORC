@@ -27,7 +27,7 @@ class ratings_tab(QWidget):
         # self.layout().addWidget(self.ui)
 
         table = score_table(self, appstate.plt_mgr)
-        dimpik = dimension_picker(appstate, "system", "benchmark", "noise", "metric")
+        dimpik = dimension_picker(appstate, "System", "Benchmark", "Noise", "Counter")
         chrt = chart(appstate)
 
         table.info_selected.connect(chrt.controls.set_measurement_info)
