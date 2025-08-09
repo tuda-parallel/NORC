@@ -1,0 +1,41 @@
+name: CI 
+
+on:
+  push:
+    branches:
+      - '*'  # Trigger on push to any branch
+      #   - 'development'  # Trigger on push to any branch
+      #   - 'main'  # Trigger on push to any branch
+      #   - '!development'  # Exclude the branch
+  pull_request:
+    branches:
+      - 'main'  # Run tests on pull requests targeting the main branch
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout latest NORC code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install NORC and dependencies
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install . 
+
+
+#      - name: Test NORC
+#        run: |
+#          source .venv/bin/activate  # Just activate the existing .venv
+#          cd test
+#          python3 -m pytest
+#          rm -rf io_results __pycache__ *.json*
