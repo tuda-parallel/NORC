@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2025, Technical University of Darmstadt, Germany
 #

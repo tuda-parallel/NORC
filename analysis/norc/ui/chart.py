@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -27,12 +27,12 @@ from matplotlib.backends.backend_qtagg import (
     NavigationToolbar2QT as FigNavigation,
 )
 
-from norhc.ui.qt_utils import update_choices
-from norhc.ui.ui_util import score_color
-import norhc.helpers.util as util
-import norhc.core.plot_rel_dev as prd
-import norhc.core.score as scr
-from norhc.core.plotmanager import PlotManager
+from norc.ui.qt_utils import update_choices
+from norc.ui.ui_util import score_color
+import norc.helpers.util as util
+import norc.core.plot_rel_dev as prd
+import norc.core.score as scr
+from norc.core.plotmanager import PlotManager
 
 
 class chart_controls(QWidget):

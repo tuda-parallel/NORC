@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2025, Technical University of Darmstadt, Germany
 #
@@ -9,11 +9,12 @@ import sys
 from PySide6.QtWidgets import QApplication
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QColor
-from norhc.classes.application_state import ApplicationState
-from norhc.ui.mainwindow import main_window
+from norc.classes.application_state import ApplicationState
+from norc.ui.mainwindow import main_window
+
 
 def main() -> None:
-    loader=QUiLoader()
+    loader = QUiLoader()
     app = QApplication(sys.argv)
     # app.setStyle("Windows")
     app.setPalette(QColor(255, 255, 255, 255))
@@ -29,3 +30,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

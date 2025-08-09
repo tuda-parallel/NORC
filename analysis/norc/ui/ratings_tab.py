@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -8,9 +8,9 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QSplitter
 from PySide6.QtGui import Qt
 
-from norhc.ui.score_table import score_table
-from norhc.ui.dimension_picker import dimension_picker
-from norhc.ui.chart import chart
+from norc.ui.score_table import score_table
+from norc.ui.dimension_picker import dimension_picker
+from norc.ui.chart import chart
 
 
 class ratings_tab(QWidget):

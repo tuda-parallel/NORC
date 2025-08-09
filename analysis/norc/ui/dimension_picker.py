@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -8,7 +8,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 from PySide6.QtCore import Signal
 
-from norhc.ui.qt_utils import update_choices
+from norc.ui.qt_utils import update_choices
 
 
 class dimension_picker(QWidget):

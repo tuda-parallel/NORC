@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -16,10 +16,10 @@ from PySide6.QtCore import Signal
 import matplotlib
 import numpy as np
 
-import norhc.helpers.util as util
-from norhc.ui.ui_util import score_color
-from norhc.core.plotmanager import PlotManager
-from norhc.ui.qt_utils import table_dimensions
+import norc.helpers.util as util
+from norc.ui.ui_util import score_color
+from norc.core.plotmanager import PlotManager
+from norc.ui.qt_utils import table_dimensions
 
 
 class score_cell(QTableWidgetItem):

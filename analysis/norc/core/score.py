@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -12,7 +12,7 @@ import argparse
 
 from tqdm import tqdm
 
-from norhc.helpers.util import data_selection, measurement_info, available_measurements, warn, load_measurement
+from norc.helpers.util import data_selection, measurement_info, available_measurements, warn, load_measurement
 
 
 # Summarized deviation and susceptibility scores

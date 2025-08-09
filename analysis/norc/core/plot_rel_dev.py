@@ -1,4 +1,4 @@
-# This file is part of the NORHC software
+# This file is part of the NORC software
 #
 # Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
 #
@@ -11,8 +11,8 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 
-import norhc.helpers.util as util
-import norhc.core.score as scr
+import norc.helpers.util as util
+import norc.core.score as scr
 
 from matplotlib import pyplot as plt
 from matplotlib import ticker
