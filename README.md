@@ -70,6 +70,25 @@ cd analysis
 pip install .
 ```
 
+### tdlr;
+```bash
+git clone https://github.com/tuda-parallel/NORHC.git
+cd NORHC
+cd acquisition
+./install.sh
+
+# Once the interactive setups completes 
+# install the analysis components
+cd ../analysis
+pip install .
+
+# Run some experiments and examine them
+cd ../acquisition
+run -i <N>
+
+# Finally launch the GUI and examine the results
+
+```
 
 ## Analyzing the Results
 Instructions on how to analyze the results are provided [here](analysis/README.md).

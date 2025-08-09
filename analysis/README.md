@@ -4,6 +4,15 @@
 It provides both command-line utilities and a GUI for automated performance measurements, statistical analysis, visualization, and ranking of metrics.
 
 ---
+## Installation
+
+Clone the repository and install locally:
+
+```bash
+git clone https://github.com/tuda-parallel/NORC.git
+cd NORC/analysis
+pip install .
+```
 
 ## Analyzing Results
 
