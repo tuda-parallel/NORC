@@ -92,7 +92,7 @@ pip install .
 
 # Run some experiments and examine them
 cd ../acquisition
-run -i <N>
+./run.sh -i <N>
 
 # Finally launch the GUI and examine the results
 
