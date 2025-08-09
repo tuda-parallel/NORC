@@ -398,7 +398,7 @@ def plot_all(experiment_dir, settings: plot_settings):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: norhc_plot" "DIR")
+        print("Usage: norc_plot" "DIR")
         exit(1)
 
     parser = argparse.ArgumentParser()

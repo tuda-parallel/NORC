@@ -64,7 +64,6 @@ norc_gui = "norc.analysis_ui:main"
 norc_analyze = "norc.core.analyze:main"
 norc_plot = "norc.core.plot_rel_dev:main"
 norc_rank = "norc.core.score:main"
-# predictor = "ftio.cli.predictor:main"
 
 
 [project.optional-dependencies]

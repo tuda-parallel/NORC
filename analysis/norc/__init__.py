@@ -1,6 +1,6 @@
-# This file is part of the FTIO software
+# This file is part of the NORC software
 #
-# Copyright (c) 2023-2024, Technical University of Darmstadt, Germany
+# Copyright (c) 2025-2026, Technical University of Darmstadt, Germany
 #
 # This software may be modified and distributed under the terms of a BSD-style license.
 # See the LICENSE file in the base directory for details.

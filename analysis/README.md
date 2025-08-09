@@ -40,10 +40,10 @@ After launch:
 After installation, the following commands are available
 ```bash
 pip install .
-norhc_gui # Launches the GUI
-norhc_analyze /path/to/experiment     # Analyze results
-norhc_plot /path/to/experiment        # Generate plots (requires analyze)
-norhc_rank /path/to/experiment        # Rank metrics (requires analyze)
+norc_gui # Launches the GUI
+norc_analyze /path/to/experiment     # Analyze results
+norc_plot /path/to/experiment        # Generate plots (requires analyze)
+norc_rank /path/to/experiment        # Rank metrics (requires analyze)
 ```
 
 

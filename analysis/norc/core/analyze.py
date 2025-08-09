@@ -184,7 +184,7 @@ def analyze_experiment(experiment_root):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: norhc_analyze  <experiment_root>")
+        print("Usage: nohc_analyze  <experiment_root>")
     else:
         analyze_experiment(sys.argv[1])
 
