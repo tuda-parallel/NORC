@@ -60,6 +60,7 @@ if [ ! -f "$CONFIG_DIR/config_done" ] && ! $quiet; then
   read -p "Is the configuration updated for this system? [y,N] " -n 1 -r
   echo # (optional) move to a new line
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    chmod +x ./util/config_assistent.sh
     ./util/config_assistent.sh
     check_failure "Configuration not finalized!"
   fi
@@ -69,17 +70,17 @@ fi
 # source again the new build settings
 source "$CONFIG_DIR/build_settings.sh"
 if [ -f experiment/config/force_local_run ]; then
-	LOCAL_RUN=true
+  LOCAL_RUN=true
 else
-	LOCAL_RUN=false
+  LOCAL_RUN=false
 fi
 
 # only source modules on cluster
 if [ $LOCAL_RUN = true ]; then
-	echo "Loading modules"
-	source "$CONFIG_DIR/modules.sh"
+  echo "Local installation. Skipping loading modules"
 else
-	echo "Local installation. Skipping loading modules"
+  echo "Loading modules"
+  source "$CONFIG_DIR/modules.sh"
 fi
 
 # The installation directory may be anywhere and doesn't know where the original files are
@@ -169,6 +170,7 @@ if $do_install; then
   fi
 
   # Noigena is always built since it's configured at build time and doesn't take much time to build anyway
+  chmod +x util/install_noigena.sh
   util/install_noigena.sh
   check_failure "Setup failed for NOIGENA"
 
@@ -242,6 +244,14 @@ chmod +x "$INSTALL_DIR"/fake_slurm/*
 # Create per-benchmark configuration directory
 mkdir -p "$EXPERIMENT_DIR/config/benchmarks"
 
+# only source modules on cluster
+if [ $LOCAL_RUN = true ]; then
+  echo "Local installation. Skipping loading modules"
+else
+  echo "Loading modules"
+  source "$CONFIG_DIR/modules.sh"
+fi
+
 # Automatically install all specified benchmarks
 for benchmark_dir in ./benchmarks/*; do
   benchmark=$(basename "$benchmark_dir")
@@ -273,9 +283,11 @@ for benchmark_dir in ./benchmarks/*; do
     print_success "$benchmark is already installed"
     continue
   fi
+  chmod +x "./benchmarks/$benchmark/build.sh"
   "./benchmarks/$benchmark/build.sh"
   check_failure "Failed to build $benchmark"
 
 done
 
+chmod +x run.sh
 exit_success "Successfully installed all components."
