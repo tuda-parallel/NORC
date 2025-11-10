@@ -59,7 +59,7 @@ Benchmarks_Configurations:
 
   Ior:
     - verbosity: 0
-    - api: MPIIO   # POSIX, MPIIO or all (for both) #compilation input (not runtime cfg)
+    - api: POSIX # POSIX, MPIIO or all (for both) #compilation input (not runtime cfg)
     - cfg_set:
       - cfg_set_name: LOW_NOISE
       - numTasks: 2

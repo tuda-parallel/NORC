@@ -10,11 +10,12 @@ fi
 
 source "$TMP_DIR/.venv/bin/activate"
 
-# TODO: It might be better to to submodule this once the repository has been published.
-# cp -rf noigena 
-# rm -rf noigena 
-git clone https://codebase.helmholtz.cloud/g.corbin/noigena-tool.git "$TMP_DIR/noigena" || echo "NOIGENA Repo exists"
-check_failure "No Noigena folder found"
+if [ ! -d "$TMP_DIR/noigena" ]; then
+  git clone https://codebase.helmholtz.cloud/g.corbin/noigena-tool.git "$TMP_DIR/noigena" || echo "NOIGENA Repo exists"
+  check_failure "No Noigena folder found"
+else
+  echo "NOIGENA Repo already exists"
+fi
 
 pushd "$TMP_DIR"
 
