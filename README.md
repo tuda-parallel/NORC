@@ -119,6 +119,45 @@ If you are a **student** (e.g., working on a thesis), please refer to our specia
 Distributed under the BSD 3-Clause License. See [LICENCE](./LICENSE) for more information.
 
 
+## Citation
+
+```
+@inproceedings{10.1145/3731599.3767517,
+  author = {Tarraf, Ahmad and Gei\ss{}, Alexander and Fuchs, Lukas and Wolf, Felix},
+  title = {Fantastic Hardware Counters and How to Find Them: Automating the Detection of Noise-Resilient Performance Counters in HPC},
+  year = {2025},
+  isbn = {9798400718717},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  url = {https://doi.org/10.1145/3731599.3767517},
+  doi = {10.1145/3731599.3767517},
+  booktitle = {Proceedings of the SC '25 Workshops of the International Conference for High Performance Computing, Networking, Storage and Analysis},
+  pages = {1587–1600},
+  numpages = {14},
+  keywords = {Hardware Counters, Noise, Performance Analysis, High-performance Computing, Parallel Programming},
+  location = {{St}. {Louis}, {MO}, {USA}},
+  series = {SC Workshops '25}
+}
+
+@inproceedings{10027495,
+  author={Ritter, Marcus and Tarraf, Ahmad and Geiß, Alexander and Daoud, Nour and Mohr, Bernd and Wolf, Felix},
+  booktitle={2022 IEEE/ACM Workshop on Programming and Performance Visualization Tools (ProTools)}, 
+  title={Conquering Noise With Hardware Counters on HPC Systems}, 
+  year={2022},
+  pages={1-10},
+  keywords={Visualization;Runtime;System performance;Systems architecture;Hardware;Behavioral sciences;Reliability;Hardware counters;performance analysis;noise;high-performance computing;parallel programming},
+  location = {{Dallas}, {TX}, {USA}}
+  doi={10.1109/ProTools56701.2022.00007}},
+```
+
+## Publications
+
+1. Ahmad Tarraf, Alexander Geiß, Lukas C. Fuchs, Felix Wolf: Fantastic Hardware Counters and How to Find Them: Automating the Detection of Noise-Resilient Performance Counters in HPC. In Proc. of the Workshop on Programming and Performance Visualization Tools (ProTools), held in conjunction with the International Conference for High Performance Computing, Networking, Storage, and Analysis (SC25), St. Louis, MO, USA, pages 1587–1600, ACM, November 2025.
+ 
+2. Marcus Ritter, Ahmad Tarraf, Alexander Geiß, Nour Daoud, Bernd Mohr, Felix Wolf: Conquering Noise With Hardware Counters on HPC Systems. In Proc. of the Workshop on Programming and Performance Visualization Tools (ProTools), held in conjunction with the International Conference for High Performance Computing, Networking, Storage, and Analysis (SC22), Dallas, TX, USA, pages 1–10, IEEE, 2022.
+
+
+
 [license.badge]: https://img.shields.io/badge/License-BSD_3--Clause-blue.svg
 
 [parallel_website_tarraf]: https://www.parallel.informatik.tu-darmstadt.de/laboratory/team/tarraf/tarraf.html
