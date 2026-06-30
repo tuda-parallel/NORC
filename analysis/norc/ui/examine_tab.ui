@@ -35,7 +35,7 @@
       </sizepolicy>
      </property>
      <property name="layoutDirection">
-      <enum>Qt::LeftToRight</enum>
+      <enum>Qt::LayoutDirection::LeftToRight</enum>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout">
       <property name="leftMargin">
@@ -53,7 +53,7 @@
       <item>
        <spacer name="horizontalSpacer">
         <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+         <enum>Qt::Orientation::Horizontal</enum>
         </property>
         <property name="sizeHint" stdset="0">
          <size>
@@ -71,20 +71,11 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
-        <property name="minimumSize">
-         <size>
-          <width>20</width>
-          <height>20</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>20</width>
-          <height>20</height>
-         </size>
-        </property>
         <property name="text">
-         <string>+</string>
+         <string>Add</string>
+        </property>
+        <property name="icon">
+         <iconset theme="list-add"/>
         </property>
         <property name="checkable">
          <bool>false</bool>
@@ -104,8 +95,8 @@
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>826</width>
-        <height>558</height>
+        <width>824</width>
+        <height>550</height>
        </rect>
       </property>
      </widget>

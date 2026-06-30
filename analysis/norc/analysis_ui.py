@@ -8,7 +8,7 @@
 import sys
 from PySide6.QtWidgets import QApplication
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPalette, Qt
 from norc.classes.application_state import ApplicationState
 from norc.ui.mainwindow import main_window
 
@@ -16,8 +16,11 @@ from norc.ui.mainwindow import main_window
 def main() -> None:
     loader = QUiLoader()
     app = QApplication(sys.argv)
-    # app.setStyle("Windows")
-    app.setPalette(QColor(255, 255, 255, 255))
+    #app.setStyle("Fusion")
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window, QColor("white"))
+    palette.setColor(QPalette.ColorRole.Base, QColor("white"))
+    app.setPalette(palette)
     appstate = ApplicationState(loader)
 
     if len(sys.argv) > 1:

@@ -42,6 +42,7 @@ for file_path in file_paths:
     print(file_path)
     with open(file_path, 'r', encoding='utf-8') as file:
         data = file.read()
+        newlines = file.newlines
     occurrences = find_license_comment.match(data)
     if occurrences:
         data_str = data[occurrences.end():]
@@ -76,5 +77,5 @@ for file_path in file_paths:
     else:
         data_str = data_str.strip()
     # print(data_str)
-    with open(file_path, 'w', encoding='utf-8') as file:
+    with open(file_path, 'w', encoding='utf-8', newline=newlines) as file:
         file.write(data_str)

@@ -1,6 +1,6 @@
 # This file is part of the NORC software
 #
-# Copyright (c) 2024-2025, Technical University of Darmstadt, Germany
+# Copyright (c) 2024-2026, Technical University of Darmstadt, Germany
 #
 # This software may be modified and distributed under the terms of a BSD-style license.
 # See the LICENSE file in the base directory for details.
@@ -62,7 +62,8 @@ class measurement_info:
     def noiseless_key(self):
         return (self.benchmark, self.system, "NO_NOISE", self.counter)
 
-    def from_key(self, k):
+    @classmethod
+    def from_key(cls, k):
         info = measurement_info()
         info.benchmark = k[0]
         info.system = k[1]
