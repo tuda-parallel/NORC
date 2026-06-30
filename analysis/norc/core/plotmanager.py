@@ -25,11 +25,13 @@ class PlotManager(QObject):
     result_ready = Signal(measurement_info)
     score_ready = Signal(measurement_info)
     reconfigured = Signal()
+    colormap_changed = Signal(str)
 
     def __init__(self):
         super().__init__()
 
         self.experiment_root = ""
+        self.colormap = "turbo"
 
         self.plot_settings = prd.plot_settings()
         self.plot_settings.selection.lump_params = True
@@ -167,6 +169,10 @@ class PlotManager(QObject):
             return True, True
 
         self.update_config_(fn)
+
+    def set_colormap(self, colormap: str):
+        self.colormap = colormap
+        self.colormap_changed.emit(colormap)
 
     def plot_calculation_(self, info: measurement_info, config_version):
         # Only start a calculation if the results would still be up to date.

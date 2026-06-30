@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
     QComboBox,
     QLabel,
     QSizePolicy,
+    QPushButton,
+    QStyle,
 )
 
 from matplotlib.figure import Figure
@@ -37,8 +39,9 @@ from norc.core.plotmanager import PlotManager
 
 class chart_controls(QWidget):
     selection_changed = Signal()
+    delete_requested = Signal()
 
-    def __init__(self, parent, plt_mgr: PlotManager):
+    def __init__(self, parent, plt_mgr: PlotManager, show_delete_btn: bool = False, borderless: bool = False):
         super().__init__(parent)
 
         self.parent = parent
@@ -50,16 +53,30 @@ class chart_controls(QWidget):
         self.currently_updating_ = False
 
         self.setLayout(QVBoxLayout(self))
-        self.layout().addWidget(FigNavigation(parent.canvas, self))
-        self.layout().addWidget(QWidget(self))
+
+        toolbar_container = QWidget(self)
+        toolbar_container.setLayout(QVBoxLayout(toolbar_container))
+        toolbar_container.layout().addWidget(FigNavigation(parent.canvas, self))
+        toolbar_container.layout().setContentsMargins(0, 0, 0, 0)
+
+        if show_delete_btn:
+            delete_btn = QPushButton("Delete Chart", self)
+            delete_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogCancelButton))
+            delete_btn.clicked.connect(self.delete_requested.emit)
+            toolbar_container.layout().addWidget(delete_btn)
+
+        self.layout().addWidget(toolbar_container)
+        if borderless:
+            self.layout().setContentsMargins(0, 0, 0, 0)
 
         self.plot_info = util.measurement_info()
         self.plot_settings = prd.plot_settings()
 
         selection_container = QWidget(self)
-        self.layout().addWidget(selection_container)
-        selection_container.setLayout(QFormLayout(selection_container))
-        form = selection_container.layout()
+        self.layout().addWidget(selection_container, 1)
+        form = QFormLayout(selection_container)
+        form.setContentsMargins(0, 0, 0, 0)
+        selection_container.setLayout(form)
 
         self.cb_benchmark = QComboBox(selection_container)
         form.addRow(QLabel("Benchmark"), self.cb_benchmark)
@@ -119,7 +136,7 @@ class chart_controls(QWidget):
 
             color = score_color(self.score.rel_resilience)
             hexcolor = QColor(color[0] * 255, color[1] * 255, color[2] * 255).name()
-            self.lb_rating.setStyleSheet(f"QLabel {{ color : {hexcolor}; }}")
+            self.lb_rating.setStyleSheet(f"QLabel {{ background-color : {hexcolor}; }}")
 
         if self.currently_updating_:
             return
@@ -159,18 +176,21 @@ class chart_controls(QWidget):
 
 
 class chart(QSplitter):
-    def __init__(self, appstate):
+    delete_requested = Signal()
+
+    def __init__(self, appstate, show_delete_btn: bool = False, borderless: bool = False):
         super().__init__()
         self.setOrientation(Qt.Horizontal)
 
         self.plt_mgr = appstate.plt_mgr
 
-        self.fig = Figure(figsize=(10, 3), dpi=100)
+        self.fig = Figure(figsize=(10, 3), dpi=100, layout="constrained")
         self.ax = self.fig.add_subplot(111)
         self.ax.margins(x=0)
         self.canvas = FigureCanvasQTAgg(self.fig)
 
-        self.controls = chart_controls(self, self.plt_mgr)
+        self.controls = chart_controls(self, self.plt_mgr, show_delete_btn, borderless)
+        self.controls.delete_requested.connect(self.delete_requested.emit)
         self.controls.selection_changed.connect(self.update_plot)
         self.controls.update()
 
@@ -194,10 +214,10 @@ class chart(QSplitter):
         b = self.controls.plot_info
         self.update_score()
         if (
-            a.benchmark == b.benchmark
-            and a.system == b.system
-            and a.counter == b.counter
-            and (a.noise_pattern in ["NO_NOISE", b.noise_pattern])
+                a.benchmark == b.benchmark
+                and a.system == b.system
+                and a.counter == b.counter
+                and (a.noise_pattern in ["NO_NOISE", b.noise_pattern])
         ):
             self.update_plot()
 

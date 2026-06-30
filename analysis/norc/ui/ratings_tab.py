@@ -28,10 +28,11 @@ class ratings_tab(QWidget):
 
         table = score_table(self, appstate.plt_mgr)
         dimpik = dimension_picker(appstate, "System", "Benchmark", "Noise", "Counter")
-        chrt = chart(appstate)
+        chrt = chart(appstate, borderless=True)
 
         table.info_selected.connect(chrt.controls.set_measurement_info)
         dimpik.dimensions_changed.connect(table.set_dimensions)
+        appstate.plt_mgr.colormap_changed.connect(lambda: table.update_scores())
 
         table_hsplit.addWidget(table)
         table_hsplit.addWidget(dimpik)

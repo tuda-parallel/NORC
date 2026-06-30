@@ -26,4 +26,10 @@ class examine_tab(QWidget):
         self.ui.pb_addchart.clicked.connect(self.add_chart)
 
     def add_chart(self):
-        self.chart_splitter.addWidget(chart(self.appstate))
+        new_chart = chart(self.appstate, show_delete_btn=True)
+        new_chart.delete_requested.connect(lambda: self.remove_chart(new_chart))
+        self.chart_splitter.addWidget(new_chart)
+        self.chart_splitter.setCollapsible(self.chart_splitter.indexOf(new_chart), False)
+
+    def remove_chart(self, chart_widget):
+        chart_widget.deleteLater()

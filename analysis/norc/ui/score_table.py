@@ -9,8 +9,10 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QStyledItemDelegate,
+    QStyle,
 )
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QPainter, QPen, Qt
 from PySide6.QtCore import Signal, QTimer
 
 import matplotlib
@@ -20,6 +22,27 @@ import norc.helpers.util as util
 from norc.ui.ui_util import score_color
 from norc.core.plotmanager import PlotManager
 from norc.ui.qt_utils import table_dimensions
+
+
+class dashed_outline_delegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        # Check if this cell is selected
+        is_selected = option.state & QStyle.State_Selected
+
+        # Draw the cell without selection highlight
+        if is_selected:
+            option.state &= ~QStyle.State_Selected
+
+        super().paint(painter, option, index)
+
+        # Draw dashed border if selected
+        if is_selected:
+            pen = QPen()
+            pen.setColor(QColor(0, 0, 0))
+            pen.setStyle(Qt.PenStyle.DotLine)
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.drawRect(option.rect.adjusted(1, 1, -2, -2))
 
 
 class score_cell(QTableWidgetItem):
@@ -47,7 +70,7 @@ class score_cell(QTableWidgetItem):
 
         self.setText(f"{score.rel_resilience:.2f}")
 
-        color = score_color(score.rel_resilience)
+        color = score_color(score.rel_resilience, self.plt_mgr.colormap)
         self.set_bg(QColor(color[0] * 255, color[1] * 255, color[2] * 255))
 
 
@@ -142,6 +165,10 @@ class score_table(QTableWidget):
                 table.setHorizontalHeaderLabels(idim0)
                 table.setRowCount(len(idim1))
                 table.setVerticalHeaderLabels(idim1)
+
+                # Apply custom delegate for dashed outline selection
+                delegate = dashed_outline_delegate()
+                table.setItemDelegate(delegate)
 
                 table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
                 table.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)

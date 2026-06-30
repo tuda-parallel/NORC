@@ -10,6 +10,7 @@ from copy import copy
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox
 from PySide6.QtCore import Qt
+import matplotlib
 
 from norc.helpers.util import experiment_filter, available_measurements
 from norc.ui.examine_tab import examine_tab
@@ -31,6 +32,9 @@ class main_window(QMainWindow):
 
         self.ui.sb_thr_contrib.setValue(1)
         self.ui.sb_thr_visits.setValue(100)
+
+        # Populate colormap selector
+        self.ui.cb_colormap.currentTextChanged.connect(appstate.plt_mgr.set_colormap)
 
         self.ui.cb_plotmode.currentTextChanged.connect(self.update_config)
         self.ui.sb_colorbands.editingFinished.connect(self.update_config)

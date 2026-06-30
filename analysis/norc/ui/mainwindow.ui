@@ -36,23 +36,38 @@
        </size>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
+       <property name="leftMargin">
+        <number>6</number>
+       </property>
+       <property name="topMargin">
+        <number>3</number>
+       </property>
+       <property name="rightMargin">
+        <number>6</number>
+       </property>
+       <property name="bottomMargin">
+        <number>3</number>
+       </property>
        <item>
         <widget class="QGroupBox" name="groupBox">
          <property name="title">
           <string>Plot Options</string>
          </property>
          <layout class="QFormLayout" name="formLayout">
+          <property name="verticalSpacing">
+           <number>3</number>
+          </property>
           <property name="leftMargin">
            <number>3</number>
           </property>
           <property name="topMargin">
-           <number>6</number>
+           <number>3</number>
           </property>
           <property name="rightMargin">
            <number>3</number>
           </property>
           <property name="bottomMargin">
-           <number>6</number>
+           <number>3</number>
           </property>
           <item row="1" column="1">
            <widget class="QSpinBox" name="sb_colorbands">
@@ -69,6 +84,37 @@
             <property name="text">
              <string>Color Bands</string>
             </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="label_colormap">
+            <property name="text">
+             <string>Colormap</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QComboBox" name="cb_colormap">
+            <item>
+             <property name="text">
+              <string>turbo</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>viridis</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>coolwarm</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>RdBu</string>
+             </property>
+            </item>
            </widget>
           </item>
           <item row="0" column="1">
@@ -101,17 +147,20 @@
           <string>Thresholds</string>
          </property>
          <layout class="QFormLayout" name="formLayout_2">
+          <property name="verticalSpacing">
+           <number>3</number>
+          </property>
           <property name="leftMargin">
            <number>3</number>
           </property>
           <property name="topMargin">
-           <number>6</number>
+           <number>0</number>
           </property>
           <property name="rightMargin">
            <number>3</number>
           </property>
           <property name="bottomMargin">
-           <number>6</number>
+           <number>3</number>
           </property>
           <item row="0" column="0">
            <widget class="QLabel" name="label_3">
@@ -168,6 +217,21 @@
           <string>Dimension Groupings</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
+          <property name="spacing">
+           <number>1</number>
+          </property>
+          <property name="leftMargin">
+           <number>3</number>
+          </property>
+          <property name="topMargin">
+           <number>3</number>
+          </property>
+          <property name="rightMargin">
+           <number>3</number>
+          </property>
+          <property name="bottomMargin">
+           <number>3</number>
+          </property>
           <item>
            <widget class="QCheckBox" name="cb_lump_benchmark">
             <property name="whatsThis">
@@ -239,6 +303,18 @@
           <string>Filters</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_3">
+          <property name="leftMargin">
+           <number>0</number>
+          </property>
+          <property name="topMargin">
+           <number>3</number>
+          </property>
+          <property name="rightMargin">
+           <number>0</number>
+          </property>
+          <property name="bottomMargin">
+           <number>3</number>
+          </property>
           <item>
            <widget class="QToolBox" name="tb_filters">
             <property name="currentIndex">
@@ -249,8 +325,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>158</width>
-               <height>124</height>
+               <width>184</width>
+               <height>157</height>
               </rect>
              </property>
              <attribute name="label">
@@ -263,8 +339,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>158</width>
-               <height>124</height>
+               <width>184</width>
+               <height>157</height>
               </rect>
              </property>
              <attribute name="label">
@@ -277,8 +353,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>158</width>
-               <height>124</height>
+               <width>184</width>
+               <height>157</height>
               </rect>
              </property>
              <attribute name="label">
@@ -291,8 +367,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>158</width>
-               <height>124</height>
+               <width>184</width>
+               <height>157</height>
               </rect>
              </property>
              <attribute name="label">
@@ -311,16 +387,16 @@
     <item>
      <widget class="QTabWidget" name="tw_modes">
       <property name="tabPosition">
-       <enum>QTabWidget::North</enum>
+       <enum>QTabWidget::TabPosition::North</enum>
       </property>
       <property name="tabShape">
-       <enum>QTabWidget::Rounded</enum>
+       <enum>QTabWidget::TabShape::Rounded</enum>
       </property>
       <property name="currentIndex">
        <number>-1</number>
       </property>
       <property name="elideMode">
-       <enum>Qt::ElideNone</enum>
+       <enum>Qt::TextElideMode::ElideNone</enum>
       </property>
       <property name="documentMode">
        <bool>true</bool>
@@ -338,10 +414,10 @@
     <bool>false</bool>
    </property>
    <property name="allowedAreas">
-    <set>Qt::TopToolBarArea</set>
+    <set>Qt::ToolBarArea::TopToolBarArea</set>
    </property>
    <property name="toolButtonStyle">
-    <enum>Qt::ToolButtonTextBesideIcon</enum>
+    <enum>Qt::ToolButtonStyle::ToolButtonTextBesideIcon</enum>
    </property>
    <property name="floatable">
     <bool>false</bool>
@@ -353,14 +429,28 @@
     <bool>false</bool>
    </attribute>
    <addaction name="action_open"/>
+   <addaction name="actionCreate_Measurement_Runner"/>
   </widget>
   <action name="action_open">
    <property name="icon">
-    <iconset theme="document-open">
-     <normaloff>.</normaloff>.</iconset>
+    <iconset theme="folder-open"/>
    </property>
    <property name="text">
     <string>Open experiment</string>
+   </property>
+  </action>
+  <action name="actionCreate_Measurement_Runner">
+   <property name="icon">
+    <iconset theme="utilities-terminal"/>
+   </property>
+   <property name="text">
+    <string>Create Measurement Runner</string>
+   </property>
+   <property name="toolTip">
+    <string>Create Measurement Runner</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
    </property>
   </action>
  </widget>
