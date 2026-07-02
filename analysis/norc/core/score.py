@@ -200,6 +200,24 @@ def print_tabular(scores, selection):
     print("\\end{table}")
 
 
+def compute_scores(experiment_root, selection):
+    noisy = {}
+    ref = {}
+    for info in available_measurements(os.path.join(experiment_root, "result", ".deviations"), selection).values():
+        key = info.key()
+        if info.noise_pattern == "NO_NOISE":
+            ref[key] = info
+        else:
+            noisy[key] = info
+
+    scores = {}
+    for key in tqdm(noisy.keys()):
+        info_ref = measurement_info.from_key(key)
+        scores[key] = score(noisy[key], ref[info_ref.noiseless_key()], selection)
+
+    return score_group(scores)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
 
@@ -234,21 +252,7 @@ def main() -> None:
     selection.contrib_threshold = args.contribution
     selection.visit_threshold = args.visits
 
-    noisy = {}
-    ref = {}
-    for info in available_measurements(os.path.join(args.experiment_root, "result", ".deviations"), selection).values():
-        key = info.key()
-        if info.noise_pattern == "NO_NOISE":
-            ref[key] = info
-        else:
-            noisy[key] = info
-
-    scores = {}
-    for key in tqdm(noisy.keys()):
-        info_ref = measurement_info.from_key(key)
-        scores[key] = score(noisy[key], ref[info_ref.noiseless_key()], selection)
-
-    sgp = score_group(scores)
+    sgp = compute_scores(args.experiment_root, selection)
 
     if args.tex:
         print_tabular(sgp.scores, selection)
