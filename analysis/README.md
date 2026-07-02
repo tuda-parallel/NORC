@@ -36,7 +36,7 @@ After launch:
 1. Use the status bar to select the root directory of an experiment.
 2. If the experiment has not been analyzed, NORC will process it automatically.
 
-## tdlr;
+## tldr;
 After installation, the following commands are available
 ```bash
 pip install .

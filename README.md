@@ -12,8 +12,8 @@
 <br />
 <div align="center">
   <h1 align="center">NORC</h1>
+  <h3 align="center"> Noise Resilient Hardware Counters in HPC</h3>
   <p align="center">
- <h3 align="center"> Noise Resilient Hardware Counters in HPC</h2>
     <a href="doc/approach.md"><strong>Explore the approach »</strong></a>
     <br />
     <a href="https://github.com/tuda-parallel/NORC/issues">Report Bug</a>
@@ -72,7 +72,7 @@ cd analysis
 pip install .
 ```
 
-### tdlr;
+### tldr;
 ```bash
 git clone https://github.com/tuda-parallel/NORC.git
 cd NORC
