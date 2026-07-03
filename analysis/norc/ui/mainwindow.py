@@ -15,6 +15,7 @@ import matplotlib
 from norc.helpers.util import experiment_filter, available_measurements
 from norc.ui.examine_tab import examine_tab
 from norc.ui.ratings_tab import ratings_tab
+from norc.ui.generate_dialog import generate_dialog
 from norc.core.analyze import analyze_experiment
 from norc.ui.ui_util import add_v_spacer, clear_widget
 
@@ -42,6 +43,7 @@ class main_window(QMainWindow):
         self.ui.sb_thr_visits.editingFinished.connect(self.update_config)
 
         self.ui.action_open.triggered.connect(self.open_experiment_dialog)
+        self.ui.actionCreate_Measurement_Runner.triggered.connect(self.open_generate_dialog)
 
         # Grouping UI
         self.ui.cb_lump_benchmark.stateChanged.connect(self.update_config)
@@ -96,6 +98,16 @@ class main_window(QMainWindow):
             self.appstate.plt_mgr.open_experiment(exdir)
 
         self.update_config()
+
+    def open_generate_dialog(self):
+        if not self.appstate.plt_mgr.experiment_root:
+            dlg = QMessageBox(self)
+            dlg.setText("Please open an experiment before creating a measurement runner.")
+            dlg.exec()
+            return
+
+        dialog = generate_dialog(self.appstate, self)
+        dialog.exec()
 
     def apply_filters(self):
         if self._filtering_in_progress:

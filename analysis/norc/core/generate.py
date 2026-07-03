@@ -33,14 +33,14 @@ def parse_args(argv=None):
     counter_group.add_argument(
         "--top",
         type=int,
-        default=1,
-        help="Select top N counters by resilience (default: 1)"
+        default=10,
+        help="Select top N counters by resilience (default: 10)"
     )
     counter_group.add_argument(
         "--min-resilience",
         type=float,
-        default=0.0,
-        help="Minimum resilience score 0.0-1.0 (default: 0.0)"
+        default=0.9,
+        help="Minimum resilience score 0.0-1.0 (default: 0.9)"
     )
     counter_group.add_argument(
         "-c", "--contribution",

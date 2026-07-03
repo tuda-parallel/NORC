@@ -472,6 +472,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.template_script),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -507,6 +508,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(template_undefined),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -526,6 +528,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.template_script2),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
             # Note: Missing --var num_neurons=...
         ]
@@ -548,6 +551,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             "--var", "ranks=4,8",
             "--var", "num_neurons=1000,2000",
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -580,6 +584,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             "--var", "n=1,2",
             "--var", "t=2,4",
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -613,6 +618,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             "--var", "n=1,2",
             "--prefix", "myapp",
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch",
             "--iterations", "2"
         ]
@@ -639,6 +645,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.template_script),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -677,6 +684,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.template_script),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -702,6 +710,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.template_script),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -727,7 +736,8 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.exp_root),
             str(self.template_script),
             "-o", str(output_script),
-            "--top", "1"
+            "--top", "1",
+            "--min-resilience", "0"
             # No --no-sbatch: is_sbatch is auto-detected from submit_job.sh
         ]
 
@@ -756,6 +766,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.template_script),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch",
             "--no-log-capture"
         ]
@@ -783,6 +794,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(self.template_script),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -816,6 +828,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(template_with_vars),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
             # Note: Missing --var problem_size=... and --var threads=...
         ]
@@ -846,6 +859,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             "--var", "size=small,large",
             "--var", "threads=2,4",
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
@@ -877,6 +891,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             str(bad_template),
             "-o", str(output_script),
             "--top", "1",
+            "--min-resilience", "0",
             "--no-sbatch"
         ]
 
