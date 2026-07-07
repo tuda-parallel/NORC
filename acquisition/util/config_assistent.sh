@@ -277,6 +277,42 @@ if ! text_input "Please enter number of build jobs to use." $num_build_jobs; the
   exit 1
 fi
 
+# Installation restricts the PATH it runs with to avoid ambiguity from unrelated directories on it.
+# By default every directory of the current CLEAN_PATH is kept; the user can deselect specific ones.
+declare -A seen_path_dirs
+path_entries=()
+IFS=':' read -r -a raw_path_entries <<<"$CLEAN_PATH"
+for dir in "${raw_path_entries[@]}"; do
+  if [ -n "$dir" ] && [ -z "${seen_path_dirs[$dir]}" ]; then
+    seen_path_dirs[$dir]=1
+    path_entries+=("$dir")
+  fi
+done
+
+path_options=()
+for dir in "${path_entries[@]}"; do
+  path_options+=("$dir" "" "ON")
+done
+
+if choose_multiple "Select which directories of your current PATH to keep during installation." "${path_options[@]}"; then
+  clean_path=$(
+    IFS=:
+    echo "${REPLY[*]}"
+  )
+else
+  exit 1
+fi
+
+# Make sure sbatch stays reachable even if its directory was deselected above, since job submission depends on it.
+sbatch_path=$(command -v sbatch)
+if [ -n "$sbatch_path" ]; then
+  sbatch_dir=$(dirname "$sbatch_path")
+  case ":$clean_path:" in
+  *":$sbatch_dir:"*) ;;
+  *) clean_path="$clean_path:$sbatch_dir" ;;
+  esac
+fi
+
 cat >"$config_dir/build_settings.sh" <<EOL
 #!/bin/bash
 # Generated with configuration assistant
@@ -285,6 +321,7 @@ cat >"$config_dir/build_settings.sh" <<EOL
 export BUILD_JOBS=${num_build_jobs}
 export USE_SPACK=${use_spack}
 export SPACK_VERSION_SUFFIX=${spack_version_suffix}
+export CLEAN_PATH="${clean_path}"
 
 ###########################SCORE-P##########################
 export SCOREP_VERSION="8.3"

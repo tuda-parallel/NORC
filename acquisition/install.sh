@@ -20,11 +20,6 @@ source "$CONFIG_DIR/build_settings.sh"
 export INSTALL_DIR=build
 export TMP_DIR=tmp
 
-###########################ENVIRONMENT######################
-# Overrides the system path at the start of setup.
-# Adding to this may introduce ambiguity and surprises.
-export CLEAN_PATH=/bin:/usr/sbin
-
 ###########################Globalization####################
 mkdir -p "$INSTALL_DIR"
 globalize "INSTALL_DIR"
@@ -34,7 +29,7 @@ mkdir -p "$INSTALL_DIR/lib"
 mkdir -p "$TMP_DIR"
 globalize "TMP_DIR"
 
-export PATH="$CLEAN_PATH"
+export CLEAN_PATH="$PATH"
 
 # Add installed programs and libraries to the path so other scripts can use them
 export PATH="$INSTALL_DIR/bin:$PATH"
@@ -75,6 +70,10 @@ if [ ! -f "$CONFIG_DIR/config_done" ] && ! $quiet; then
   fi
   touch "$CONFIG_DIR/config_done"
 fi
+
+export PATH="$CLEAN_PATH"
+export PATH="$INSTALL_DIR/bin:$PATH"
+export LD_LIBRARY_PATH="$INSTALL_DIR/lib:$LD_LIBRARY_PATH"
 
 # source again the new build settings
 source "$CONFIG_DIR/build_settings.sh"
