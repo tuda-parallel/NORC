@@ -29,6 +29,18 @@ odd(){
   echo $cores
 }
 
+# generates a hex cpu-bind mask selecting the even-numbered cores out of $1 total cores.
+# every nibble covers 4 bits/cores and, aligned on an even bit, always has the pattern 0101 (hex 5),
+# so the mask is just that many "5" digits, which avoids overflowing bash's 64-bit integers on wide nodes.
+even_mask() {
+  local nibbles=$(( ($1 + 3) / 4 ))
+  local mask=""
+  for ((n = 0; n < nibbles; n++)); do
+    mask="${mask}5"
+  done
+  echo "0x$mask"
+}
+
 execution_directory() {
   local system="$1"
   local benchmark="$2"
@@ -79,6 +91,7 @@ job_from_template() {
   # NOIGENA always runs on half the available cores so that the noise level will always be roughly the same.
   local n_procs_noigena=$(( CORES_PER_NODE / 2 ))
   local n_procs_total=$(( n_procs_benchmark + n_procs_noigena ))
+  local n_procs_global=$(( n_procs_total * $n_nodes ))
 
   # Add the job script's main part (still a template)
   cat config/job_templates/$JOB_TEMPLATE.sh >> "$jobscript"
@@ -92,9 +105,11 @@ job_from_template() {
           s|§noise_procs|$n_procs_noigena|g;
           s|§threads|$n_threads|g;
           s|§total_tasks|$n_procs_total|g;
+          s|§global_tasks|$n_procs_global|g;
           s|§cpus|$CORES_PER_NODE|g;
           s|§odd_cpus|$(odd $CORES_PER_NODE)|g;
           s|§even_cpus|$(even $CORES_PER_NODE)|g;
+          s|§even_cpus_mask|$(even_mask $CORES_PER_NODE)|g;
           s|§partition|$PARTITION|g;
           s|§budget|$BUDGET|g;" "$jobscript"
 

@@ -68,7 +68,7 @@ for array_id in $(ls -v $ARRAY_DIR); do
 
   # Ensure noise pattern, run the benchmark on even cores, and update job step.
   set_noise_pattern $NOISE_PATTERN
-  OMP_NUM_THREADS=§threads srun -n $((§procs * §nodes)) --ntasks-per-node=§procs --overlap --cpu-bind=verbose,mask_cpu:0x555555555555 "§benchmark" $BENCHMARK_PARAMS ;
+  OMP_NUM_THREADS=§threads srun -n $((§procs * §nodes)) --ntasks-per-node=§procs --overlap --cpu-bind=verbose,mask_cpu:§even_cpus_mask "§benchmark" $BENCHMARK_PARAMS ;
   next_job_step=$((next_job_step + 1))
   export main_exit_code=$?
 

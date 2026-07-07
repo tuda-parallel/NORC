@@ -38,7 +38,7 @@ if [ ! $NOISE_PATTERN = NO_NOISE ]; then
   sleep $delay
 fi
 
-OMP_NUM_THREADS=§threads srun -n $((§procs * §nodes)) --ntasks-per-node=§procs --overlap --cpu-bind=verbose,mask_cpu:0x555555555555 "§benchmark" $BENCHMARK_PARAMS
+OMP_NUM_THREADS=§threads srun -n $((§procs * §nodes)) --ntasks-per-node=§procs --overlap --cpu-bind=verbose,mask_cpu:§even_cpus_mask "§benchmark" $BENCHMARK_PARAMS
 export main_exit_code=$?
 killall -u $(whoami) -s 9 -v -w NOIGENA 2> /dev/null
 
