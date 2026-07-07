@@ -98,8 +98,8 @@ job_from_template() {
 
   # Fill in the job template's parameters to create a working script for sbatch.
   sed -i "s|§benchmark|$benchmark|g;
-          s|§status_out|$(pwd)/status/out/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
-          s|§status_err|$(pwd)/status/err/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
+          s|§status_out|$STATUS_DIR/out/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
+          s|§status_err|$STATUS_DIR/err/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
           s|§nodes|$n_nodes|g;
           s|§procs|$n_procs_benchmark|g;
           s|§noise_procs|$n_procs_noigena|g;

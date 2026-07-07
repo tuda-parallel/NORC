@@ -120,7 +120,29 @@ choosebox() {
 choose_multiple() {
   if $has_whiptail; then
     IFS=" " read -r -a size <<<"$(dimensions "$1")"
-    result=$(whiptail --title "$app_name configuration assistant" --checklist "$1" $((size[0] + ($# / 3))) $((size[1] + 10)) $(($# / 3)) "${@:2}" 3>&1 1>&2 2>&3)
+    read -a ttysize <<<"$(stty size)"
+    item_count=$(($# / 3))
+
+    # Cap the dialog to the terminal size instead of growing without bound with the item count;
+    # whiptail scrolls the list internally when its height is smaller than the item count.
+    box_height=$((size[0] + item_count))
+    max_height=$((ttysize[0] - 2))
+    if [ $box_height -gt $max_height ]; then
+      box_height=$max_height
+    fi
+
+    box_width=$((size[1] + 10))
+    max_width=$((ttysize[1] - 2))
+    if [ $box_width -gt $max_width ]; then
+      box_width=$max_width
+    fi
+
+    list_height=$((box_height - size[0]))
+    if [ $list_height -lt 1 ]; then
+      list_height=1
+    fi
+
+    result=$(whiptail --title "$app_name configuration assistant" --checklist "$1" $box_height $box_width $list_height "${@:2}" 3>&1 1>&2 2>&3)
     ec=$?
     REPLY=($(echo $result | tr -d '"'))
     return $ec
@@ -442,6 +464,72 @@ EOL
     break
   fi
 done
+
+if ! $local_execution; then
+  infobox "Submitting a test job to sbatch using the configured job template to verify the configuration."
+
+  # Reuse the same job-generation logic run_benchmarks.sh uses, so the test job is built exactly like a real one.
+  runner_dir="$(cd "$(dirname "$0")/../runner" && pwd)"
+  source <(sed '/^source \.\/macros\.sh$/d' "$runner_dir/benchmark_util.sh")
+
+  test_benchmark="norc_config_test"
+  test_res_cfg="n1p1t1"
+  export STATUS_DIR="$config_dir/../status_test"
+  rm -rf "$STATUS_DIR" "exec/${test_benchmark}.${system_name}.${test_res_cfg}"
+  mkdir -p "$STATUS_DIR/jobs" \
+    "$STATUS_DIR/out/${test_benchmark}/${system_name}${test_res_cfg}" \
+    "$STATUS_DIR/err/${test_benchmark}/${system_name}${test_res_cfg}"
+
+  job_from_template "$system_name" "$test_benchmark" 1 1 1
+
+  # Absolutized because the job runs with its scratch dir as CWD, from where a relative path would resolve wrong.
+  exec_dir="$(pwd)/$(execution_directory "$system_name" "$test_benchmark" "$test_res_cfg")"
+  export ARRAY_DIR="$exec_dir/array"
+  mkdir -p "$ARRAY_DIR" "$exec_dir/timings"
+
+  experiment_directory="$exec_dir/timings/test_experiment"
+  mkdir -p "${experiment_directory}.tmp"
+  cat >"$ARRAY_DIR/0" <<EOL
+export EXPERIMENT_DIRECTORY="$experiment_directory"
+export NOISE_PATTERN=NO_NOISE
+export PARAMSET_NAME=test
+export BENCHMARK_PARAMS=""
+export SCOREP_METRIC_PAPI=""
+EOL
+
+  sed -i "s/§time/$(slurmify_time 120)/g" "$exec_dir/job.sh"
+
+  pushd "$exec_dir/scratch" >/dev/null
+  if [ "$(is_array_based ../job.sh)" = true ]; then
+    sbatch_output=$(sbatch --wait --array=0-0 ../job.sh 2>&1)
+  else
+    sbatch_output=$(sbatch --wait ../job.sh 2>&1)
+  fi
+  sbatch_status=$?
+  popd >/dev/null
+
+  test_failed=false
+  if [ $sbatch_status -ne 0 ]; then
+    test_failed=true
+    msgbox "Test job submission failed:\n$sbatch_output\n\nPlease double-check your partition, account, and module settings."
+  else
+    test_job_id=$(echo "$sbatch_output" | grep -oE '[0-9]+' | tail -1)
+    test_result=$(cat "$STATUS_DIR/jobs/${test_job_id}_0" 2>/dev/null)
+    if [ "$test_result" = "0" ]; then
+      msgbox "Test job (ID $test_job_id) completed successfully. Your configuration appears to be working."
+    else
+      test_failed=true
+      msgbox "Test job (ID $test_job_id) did not finish successfully (exit status: ${test_result:-unknown}).\nCheck $STATUS_DIR/out and $STATUS_DIR/err for details."
+    fi
+  fi
+
+  rm -rf "$STATUS_DIR" "exec/${test_benchmark}.${system_name}.${test_res_cfg}"
+  rmdir exec 2>/dev/null
+
+  if $test_failed; then
+    exit 1
+  fi
+fi
 
 if $local_execution; then
   cores_this_node=$(getconf _NPROCESSORS_ONLN)
