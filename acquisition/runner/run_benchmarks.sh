@@ -19,21 +19,21 @@ print_usage() {
   echo "Usage: $SCRIPT_NAME [OPTION]..."
   echo "OPTIONS:"
 
-  echo "\t-h, --help"
-  echo "\t\tPrints this help message"
+  printf "\t-h, --help\n"
+  printf "\t\tPrints this help message\n"
 
-  echo "\t-i N, --iterations N"
-  echo "\t\tNumber of iterations for each benchmark"
+  printf "\t-i N, --iterations N\n"
+  printf "\t\tNumber of iterations for each benchmark\n"
 
-  echo "\t-l, --local:"
-  echo "\t\tExecute benchmarks locally with mpirun rather than Slurm"
-  echo "\t\tDO NOT USE ON LOGIN NODES!"
+  printf "\t-l, --local:\n"
+  printf "\t\tExecute benchmarks locally with mpirun rather than Slurm\n"
+  printf "\t\tDO NOT USE ON LOGIN NODES!\n"
 
-  echo "\t-r N, --retry N:"
-  echo "\t\t Maximum number of retries for failed jobs"
+  printf "\t-r N, --retry N:\n"
+  printf "\t\t Maximum number of retries for failed jobs\n"
 
-  echo "\t-t, --reset-time:"
-  echo "\t\t Remove previous time measurements and use the initial estimate for each benchmark"
+  printf "\t-t, --reset-time:\n"
+  printf "\t\t Remove previous time measurements and use the initial estimate for each benchmark\n"
 }
 
 run_arrays() {
@@ -273,7 +273,7 @@ while [ : ]; do
   case "$1" in
   -h | --help)
     print_usage
-    shift
+    exit 1
     ;;
   -i | --iterations)
     N_ITERATIONS=$2

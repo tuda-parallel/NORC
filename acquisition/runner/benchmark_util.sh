@@ -88,6 +88,14 @@ job_from_template() {
     check_warn "WARNING: Benchmark $benchmark has an empty resource folder. Consider deleting it or adding resources."
   fi
 
+  # Ensure prologue/epilogue scripts are executable, since cp does not preserve
+  # the executable bit reliably across all filesystems (e.g. some network mounts).
+  for hook in prologue.sh epilogue.sh; do
+    if [ -f "$exec_dir/scratch/$hook" ]; then
+      chmod +x "$exec_dir/scratch/$hook"
+    fi
+  done
+
   # NOIGENA always runs on half the available cores so that the noise level will always be roughly the same.
   local n_procs_noigena=$(( CORES_PER_NODE / 2 ))
   local n_procs_total=$(( n_procs_benchmark + n_procs_noigena ))
@@ -107,9 +115,9 @@ job_from_template() {
           s|§total_tasks|$n_procs_total|g;
           s|§global_tasks|$n_procs_global|g;
           s|§cpus|$CORES_PER_NODE|g;
+          s|§even_cpus_mask|$(even_mask $CORES_PER_NODE)|g;
           s|§odd_cpus|$(odd $CORES_PER_NODE)|g;
           s|§even_cpus|$(even $CORES_PER_NODE)|g;
-          s|§even_cpus_mask|$(even_mask $CORES_PER_NODE)|g;
           s|§partition|$PARTITION|g;
           s|§budget|$BUDGET|g;" "$jobscript"
 
