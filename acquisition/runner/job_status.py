@@ -160,8 +160,11 @@ def show_status(jobs, dir, once=False):
             cnt = status_ctrs[benchmark]
             check_job(str(job_id), cnt, dir)
 
-            has_unfinished_jobs = cnt.running > 0 or cnt.pending > 0
-            has_failed_jobs = has_failed_jobs or (cnt.failed > 0)
+        total = job_count()
+        for cnt in status_ctrs.values():
+            total.add(cnt)
+        has_unfinished_jobs = total.running > 0 or total.pending > 0
+        has_failed_jobs = total.failed > 0
 
         draw_screen(row_names, col_names, status_ctrs, progress_counter)
         progress_counter += 1

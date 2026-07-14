@@ -92,6 +92,34 @@ text_input() {
   return 0
 }
 
+multiline_input() {
+  if $has_whiptail; then
+    local tmpfile
+    tmpfile=$(mktemp)
+    if [ -n "$2" ]; then
+      printf '%s\n' "$2" >"$tmpfile"
+    fi
+    REPLY=$(whiptail --title "$app_name configuration assistant" --editbox "$tmpfile" $(dimensions "$1") 3>&1 1>&2 2>&3)
+    local status=$?
+    rm -f "$tmpfile"
+    return $status
+  fi
+
+  echo "$1"
+  if [ -n "$2" ]; then
+    echo "Current value:"
+    echo "$2"
+  fi
+  echo "(Enter one line at a time. Finish with an empty line.)"
+  local lines=()
+  while IFS= read -r line; do
+    [ -z "$line" ] && break
+    lines+=("$line")
+  done
+  REPLY=$(printf '%s\n' "${lines[@]}")
+  return 0
+}
+
 choosebox() {
   if $has_whiptail; then
     IFS=" " read -r -a size <<<"$(dimensions "$1")"
@@ -214,10 +242,105 @@ find_non_overlapping_sets() {
 
 config_dir="$PWD/config"
 
+# Runs $1 (a bash command or script body) either directly or, if use_sbatch_detection
+# is set, as a synchronous sbatch job on a compute node. Login nodes frequently expose
+# different (or no) hardware counters than compute nodes, so PAPI's detection commands
+# need to run on the same kind of node the benchmarks will actually execute on.
+run_detection() {
+  local body="$1"
+  # Each papi_event_chooser call reinitializes PAPI and probes hardware-counter
+  # multiplexing from scratch, so it can take several seconds on its own. Callers
+  # that invoke it many times (e.g. once per selected counter) should pass a time
+  # budget in seconds via $2; otherwise a short default suffices.
+  local time_budget_seconds="${2:-300}"
+
+  if ! $use_sbatch_detection; then
+    bash -c "$body"
+    return $?
+  fi
+
+  local time_limit
+  time_limit=$(printf '%02d:%02d:%02d' $((time_budget_seconds / 3600)) $(((time_budget_seconds % 3600) / 60)) $((time_budget_seconds % 60)))
+
+  # /tmp is typically local, per-node scratch on cluster compute nodes, not shared
+  # with the submission host, so the job's output would be invisible once it lands
+  # on a different node. Use shared project storage instead.
+  local job_dir
+  job_dir=$(mktemp -d "$BASE_DIR/.norc_detect.XXXXXX")
+  local job_script="$job_dir/detect.sh"
+  local out_file="$job_dir/detect.out"
+
+  {
+    echo "#!/bin/bash"
+    echo "#SBATCH --partition=$detection_partition"
+    echo "#SBATCH --account=$detection_budget"
+    echo "#SBATCH --job-name=NORC-counter-detection"
+    echo "#SBATCH --nodes=1"
+    echo "#SBATCH --ntasks=1"
+    echo "#SBATCH --time=$time_limit"
+    echo "#SBATCH --output=$out_file"
+    if [ -n "$detection_prefix" ]; then
+      echo "$detection_prefix"
+    fi
+    if [ -f "$BASE_DIR/$INSTALL_DIR/env.sh" ]; then
+      echo "source \"$BASE_DIR/$INSTALL_DIR/env.sh\""
+    fi
+    echo "$body"
+  } >"$job_script"
+
+  if ! sbatch --wait "$job_script" >"$job_dir/submit.log" 2>&1; then
+    msgbox "Failed to run the counter detection job:\n$(cat "$job_dir/submit.log")"
+    rm -rf "$job_dir"
+    return 1
+  fi
+
+  cat "$out_file" 2>/dev/null
+  rm -rf "$job_dir"
+}
+
 # configuring metrics to measure
 if [ "$1" == "metrics" ]; then
+  BASE_DIR="${BASE_DIR:-$PWD}"
+  INSTALL_DIR="${INSTALL_DIR:-build}"
+
+  use_sbatch_detection=false
+  detection_partition=""
+  detection_budget=""
+  detection_prefix=""
+
+  if command -v sbatch >/dev/null 2>&1; then
+    if yes_no "Detected SLURM. Hardware counters are often only accessible on compute nodes. Do you want to run the counter detection as an sbatch job?"; then
+      use_sbatch_detection=true
+
+      detection_systems=()
+      for system in "$config_dir"/systems/*/; do
+        detection_systems+=("$(basename "$system")")
+        detection_systems+=("")
+      done
+
+      if [ "${#detection_systems[@]}" -gt 0 ] && choosebox "Choose a system configuration to submit the detection job with:" "${detection_systems[@]}"; then
+        detection_system=$REPLY
+        source "$config_dir/systems/$detection_system/system.sh"
+        detection_partition=$PARTITION
+        detection_budget=$BUDGET
+        if [ -f "$config_dir/systems/$detection_system/batch_prefix" ]; then
+          detection_prefix=$(cat "$config_dir/systems/$detection_system/batch_prefix")
+        fi
+      else
+        if ! text_input "Please specify a partition for the counter detection job."; then
+          exit 1
+        fi
+        detection_partition=$REPLY
+        if ! text_input "Please specify a billing account for the counter detection job."; then
+          exit 1
+        fi
+        detection_budget=$REPLY
+      fi
+    fi
+  fi
+
   available_metrics=()
-  avail_output=$(papi_avail --check)
+  avail_output=$(run_detection "papi_avail --check")
   num_hardware_counters=$(grep "Number Hardware Counters" <<<"$avail_output" | awk -F': ' '{print $2}')
   counter_list=$(grep "PAPI_" <<<"$avail_output")
 
@@ -231,7 +354,27 @@ if [ "$1" == "metrics" ]; then
 
   if choose_multiple "Please select the hardware counter presets to analyze from the list below. Your system has $num_hardware_counters raw hardware counters simultaneously available. If you use more the runs will be split up." "${available_metrics[@]}"; then
     selected_counters=("${REPLY[@]}")
-    find_non_overlapping_sets "${selected_counters[@]}"
+
+    if $use_sbatch_detection; then
+      # Run the whole set-partitioning algorithm in a single remote job instead of
+      # submitting one job per papi_event_chooser call, which would be far too slow.
+      remote_script=$(
+        declare -f find_non_overlapping_sets
+        printf 'find_non_overlapping_sets'
+        printf ' %q' "${selected_counters[@]}"
+        printf '\n'
+        echo 'printf "%s\n" "${counter_sets[@]}"'
+      )
+      # Roughly bounded by two papi_event_chooser calls per selected counter (one
+      # that succeeds and one that probes the next group's boundary), each of
+      # which can take several seconds, plus a fixed baseline for job startup.
+      detection_time_budget=$((60 + 10 * ${#selected_counters[@]}))
+      counter_sets_raw=$(run_detection "$remote_script" "$detection_time_budget")
+      mapfile -t counter_sets <<<"$counter_sets_raw"
+    else
+      find_non_overlapping_sets "${selected_counters[@]}"
+    fi
+
     true >"$config_dir/metrics.cfg"
     for counter_set in "${counter_sets[@]}"; do
       tr -s '[:blank:]' ',' <<<"${counter_set[*]}" >>"$config_dir/metrics.cfg"
@@ -437,7 +580,7 @@ while true; do
       fi
       account=$REPLY
 
-      if ! text_input "You can optionally specify additonal sbatch prefixes (e.g., #SBATCH --hint=multithread)."; then
+      if ! multiline_input "You can optionally specify additional sbatch prefixes, one per line (e.g., #SBATCH --hint=multithread)."; then
         continue
       fi
       batch_prefix=$REPLY
