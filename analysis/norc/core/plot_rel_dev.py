@@ -35,6 +35,7 @@ class plot_settings:
         self.split_after = 0
 
         self.selection = util.data_selection()
+        self.tree = None
 
 
 class cached_plot:
@@ -116,7 +117,7 @@ def prepare_plot(settings: plot_settings, p: util.measurement_info):
     # TODO: Show progress
     if settings.font_size:
         plt.rcParams.update({"font.size": settings.font_size})
-    visits, contributions, deviations = scr.get_filtered_data(p, settings.selection)
+    visits, contributions, deviations = scr.get_filtered_data(p, settings.selection, settings.tree)
     deviation_score = scr.deviation_score_from_data(visits, contributions, deviations, settings.selection)
 
     accumulate = get_accumulator(settings.plot_mode)
@@ -234,8 +235,9 @@ def plot(ax: plt.Axes, c1: cached_plot, c2: cached_plot, settings: plot_settings
             )
 
 
-def plot_all(experiment_dir, settings: plot_settings):
-    plt_infs = util.available_measurements(experiment_dir, settings.selection)
+def plot_all(tree, experiment_dir, settings: plot_settings):
+    settings.tree = tree
+    plt_infs = util.available_measurements(tree, experiment_dir, settings.selection)
 
     unsorted_benchmarks = set()
     unsorted_systems = set()
@@ -264,13 +266,13 @@ def plot_all(experiment_dir, settings: plot_settings):
         sel.lump_resources = True
         sel.lump_benchmarks = True
 
-        lumped_infs = util.available_measurements(experiment_dir, sel)
+        lumped_infs = util.available_measurements(tree, experiment_dir, sel)
         scores = {}
         for inf in tqdm(lumped_infs.values(), "Scoring"):
             if inf.noise_pattern == "NO_NOISE":
                 continue
             key = inf.key()
-            scores[key] = scr.score(inf, lumped_infs[inf.noiseless_key()], sel)
+            scores[key] = scr.score(inf, lumped_infs[inf.noiseless_key()], sel, tree)
         sgp = scr.score_group(scores)
         scores = {c: s for c, s in scores.items() if not np.isinf(s.rel_resilience)}
 
@@ -473,7 +475,8 @@ def main():
     settings.sorted = args.sorted
     settings.split_after = args.split
 
-    plot_all(os.path.join(args.experiment_root, "result", ".deviations"), settings)
+    tree = util.open_experiment_source(args.experiment_root)
+    plot_all(tree, os.path.join(tree.root, "result", ".deviations"), settings)
     plt.show()
 
 

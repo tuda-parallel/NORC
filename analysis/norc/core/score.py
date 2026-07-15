@@ -12,14 +12,21 @@ import argparse
 
 from tqdm import tqdm
 
-from norc.helpers.util import data_selection, measurement_info, available_measurements, warn, load_measurement
+from norc.helpers.util import (
+    data_selection,
+    measurement_info,
+    available_measurements,
+    warn,
+    load_measurement,
+    open_experiment_source,
+)
 
 
 # Summarized deviation and susceptibility scores
 class score:
-    def __init__(self, noisy_info, ref_info, selection):
-        noisy_data = get_filtered_data(noisy_info, selection)
-        ref_data = get_filtered_data(ref_info, selection)
+    def __init__(self, noisy_info, ref_info, selection, tree):
+        noisy_data = get_filtered_data(noisy_info, selection, tree)
+        ref_data = get_filtered_data(ref_info, selection, tree)
         # Deviation score for noisy measurement
         self.dev_noisy = deviation_score(noisy_info, selection, noisy_data)
         # Deviation score for reference measurement
@@ -92,12 +99,12 @@ def deviation_score_from_data(visits, contribution, deviation, selection: data_s
     return score / total_contribution
 
 
-def get_filtered_data(info: measurement_info, selection: data_selection):
+def get_filtered_data(info: measurement_info, selection: data_selection, tree):
     visits = []
     contributions = []
     deviations = []
     for path in info.file_paths:
-        measurement = load_measurement(path)
+        measurement = load_measurement(tree, path)
         for callpath in measurement:
             if not selection or (
                 callpath.visits >= selection.visit_threshold and callpath.contribution >= selection.contrib_threshold
@@ -201,9 +208,12 @@ def print_tabular(scores, selection):
 
 
 def compute_scores(experiment_root, selection):
+    tree = open_experiment_source(experiment_root)
+    deviation_dir = os.path.join(tree.root, "result", ".deviations")
+
     noisy = {}
     ref = {}
-    for info in available_measurements(os.path.join(experiment_root, "result", ".deviations"), selection).values():
+    for info in available_measurements(tree, deviation_dir, selection).values():
         key = info.key()
         if info.noise_pattern == "NO_NOISE":
             ref[key] = info
@@ -213,7 +223,7 @@ def compute_scores(experiment_root, selection):
     scores = {}
     for key in tqdm(noisy.keys()):
         info_ref = measurement_info.from_key(key)
-        scores[key] = score(noisy[key], ref[info_ref.noiseless_key()], selection)
+        scores[key] = score(noisy[key], ref[info_ref.noiseless_key()], selection, tree)
 
     return score_group(scores)
 

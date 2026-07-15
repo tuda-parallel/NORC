@@ -18,7 +18,7 @@ from PySide6.QtCore import QObject, Signal
 
 import norc.core.plot_rel_dev as prd
 from norc.core.score import score, score_group
-from norc.helpers.util import measurement_info, available_measurements, experiment_filter, warn
+from norc.helpers.util import measurement_info, available_measurements, experiment_filter, warn, open_experiment_source
 
 
 class PlotManager(QObject):
@@ -70,12 +70,15 @@ class PlotManager(QObject):
         self.metrics.clear()
 
         # Check if there is anything to load
-        deviation_dir = os.path.join(self.experiment_root, "result", ".deviations")
-        if not os.path.exists(deviation_dir):
+        tree = self.plot_settings.tree
+        if tree is None:
+            return
+        deviation_dir = os.path.join(tree.root, "result", ".deviations")
+        if not tree.isdir(deviation_dir):
             return
 
         # Get all available plot infos
-        self.infos = available_measurements(deviation_dir, self.plot_settings.selection)
+        self.infos = available_measurements(tree, deviation_dir, self.plot_settings.selection)
 
         # Repopulate parameters
         for inf in self.infos.values():
@@ -107,7 +110,10 @@ class PlotManager(QObject):
 
     def open_experiment(self, experiment_root):
         def fn():
+            if self.plot_settings.tree is not None:
+                self.plot_settings.tree.close()
             self.experiment_root = experiment_root
+            self.plot_settings.tree = open_experiment_source(experiment_root)
             self.update_available_measurements_()
             return True, True
 
@@ -208,7 +214,7 @@ class PlotManager(QObject):
 
         t_start = time.process_time()
 
-        scr = score(info, self.infos[info.noiseless_key()], self.plot_settings.selection)
+        scr = score(info, self.infos[info.noiseless_key()], self.plot_settings.selection, self.plot_settings.tree)
 
         # Only write the result if it still fits the configuration.
         with self.config_mutex_:

@@ -8,11 +8,12 @@
 import os
 from copy import copy
 
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox, QStyle
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
 import matplotlib
 
-from norc.helpers.util import experiment_filter, available_measurements
+from norc.helpers.util import experiment_filter, available_measurements, open_experiment_source
 from norc.ui.examine_tab import examine_tab
 from norc.ui.ratings_tab import ratings_tab
 from norc.ui.generate_dialog import generate_dialog
@@ -42,7 +43,17 @@ class main_window(QMainWindow):
         self.ui.sb_thr_contrib.editingFinished.connect(self.update_config)
         self.ui.sb_thr_visits.editingFinished.connect(self.update_config)
 
-        self.ui.action_open.triggered.connect(self.open_experiment_dialog)
+        # Freedesktop icon themes (set via `iconset theme=` in the .ui file) aren't
+        # available on all platforms (e.g. Windows), so fall back to Qt's built-in
+        # standard icons whenever the theme lookup comes back empty.
+        style = self.style()
+        if self.ui.action_open.icon().isNull():
+            self.ui.action_open.setIcon(style.standardIcon(QStyle.SP_DirOpenIcon))
+        if self.ui.action_open_zip.icon().isNull():
+            self.ui.action_open_zip.setIcon(style.standardIcon(QStyle.SP_DriveHDIcon))
+
+        self.ui.action_open.triggered.connect(self.open_experiment_folder_dialog)
+        self.ui.action_open_zip.triggered.connect(self.open_experiment_zip_dialog)
         self.ui.actionCreate_Measurement_Runner.triggered.connect(self.open_generate_dialog)
 
         # Grouping UI
@@ -73,17 +84,39 @@ class main_window(QMainWindow):
             noise=self.ui.cb_lump_noise.checkState() == Qt.Checked,
         )
 
-    def open_experiment_dialog(self):
+    def open_experiment_folder_dialog(self):
         dialog = QFileDialog(self.ui)
         dialog.setFileMode(QFileDialog.Directory)
+        self._open_experiment_from_dialog(dialog)
+
+    def open_experiment_zip_dialog(self):
+        dialog = QFileDialog(self.ui)
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        dialog.setNameFilter("Zip archives (*.zip)")
+        self._open_experiment_from_dialog(dialog)
+
+    def _open_experiment_from_dialog(self, dialog):
         if dialog.exec():
-            exdir = dialog.selectedFiles()[0]
-            if not os.path.isdir(os.path.join(exdir, "result")):
+            selected = dialog.selectedFiles()[0]
+            try:
+                # Only used to validate the selection; closed before analyze_experiment
+                # and plt_mgr.open_experiment (which open their own handles) run, so we
+                # never have more than one handle on the same zip archive open at once.
+                with open_experiment_source(selected) as tree:
+                    has_result = tree.isdir(os.path.join(tree.root, "result"))
+                    has_deviations = has_result and tree.isdir(os.path.join(tree.root, "result", ".deviations"))
+            except FileNotFoundError as e:
                 dlg = QMessageBox(self)
-                dlg.setText("The selected directory does not contain a result.")
+                dlg.setText(str(e))
                 dlg.exec()
                 return
-            if not os.path.isdir(os.path.join(exdir, "result", ".deviations")):
+
+            if not has_result:
+                dlg = QMessageBox(self)
+                dlg.setText("The selected experiment does not contain a result.")
+                dlg.exec()
+                return
+            if not has_deviations:
                 dlg = QMessageBox(self)
                 dlg.setText(
                     "A measurement result was found but no deviations are present.\nCalculate them now (may take a while)?"
@@ -91,11 +124,11 @@ class main_window(QMainWindow):
                 dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 resp = dlg.exec()
                 if resp == QMessageBox.Yes:
-                    analyze_experiment(exdir)
+                    analyze_experiment(selected)
                 else:
                     return
 
-            self.appstate.plt_mgr.open_experiment(exdir)
+            self.appstate.plt_mgr.open_experiment(selected)
 
         self.update_config()
 
@@ -153,8 +186,11 @@ class main_window(QMainWindow):
         self.filter_boxes = {"benchmark": [], "system": [], "noise": [], "counter": []}
 
         # Check if there is anything to load
-        deviation_dir = os.path.join(plt_mgr.experiment_root, "result", ".deviations")
-        if not os.path.exists(deviation_dir):
+        tree = plt_mgr.plot_settings.tree
+        if tree is None:
+            return
+        deviation_dir = os.path.join(tree.root, "result", ".deviations")
+        if not tree.isdir(deviation_dir):
             return
 
         # Get all available plot infos
@@ -163,7 +199,7 @@ class main_window(QMainWindow):
         noises = set()
         metrics = set()
 
-        for inf in available_measurements(deviation_dir, sel).values():
+        for inf in available_measurements(tree, deviation_dir, sel).values():
             benchmarks.add(inf.benchmark)
             systems.add(inf.system)
             noises.add(inf.noise_pattern)

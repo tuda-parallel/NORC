@@ -325,8 +325,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>184</width>
-               <height>157</height>
+               <width>96</width>
+               <height>26</height>
               </rect>
              </property>
              <attribute name="label">
@@ -339,8 +339,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>184</width>
-               <height>157</height>
+               <width>96</width>
+               <height>26</height>
               </rect>
              </property>
              <attribute name="label">
@@ -353,8 +353,8 @@
               <rect>
                <x>0</x>
                <y>0</y>
-               <width>184</width>
-               <height>157</height>
+               <width>96</width>
+               <height>26</height>
               </rect>
              </property>
              <attribute name="label">
@@ -429,6 +429,8 @@
     <bool>false</bool>
    </attribute>
    <addaction name="action_open"/>
+   <addaction name="action_open_zip"/>
+   <addaction name="separator"/>
    <addaction name="actionCreate_Measurement_Runner"/>
   </widget>
   <action name="action_open">
@@ -436,7 +438,15 @@
     <iconset theme="folder-open"/>
    </property>
    <property name="text">
-    <string>Open experiment</string>
+    <string>Open experiment folder</string>
+   </property>
+  </action>
+  <action name="action_open_zip">
+   <property name="icon">
+    <iconset theme="document-open"/>
+   </property>
+   <property name="text">
+    <string>Open experiment zip</string>
    </property>
   </action>
   <action name="actionCreate_Measurement_Runner">
