@@ -6,7 +6,7 @@
 # See the LICENSE file in the base directory for details.
 
 __title__ = "NORC"
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 __license__ = "BSD 3"
 __description__ = "NORC: Noise Resilient Hardware Counters in HPC"
 __copyright__ = (
