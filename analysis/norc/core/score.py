@@ -70,9 +70,12 @@ class score_group:
             max_susceptibility = max(max_susceptibility, s.susceptibility)
             min_susceptibility = min(min_susceptibility, s.susceptibility)
 
+        if max_deviation == 0 or max_susceptibility == 0:
+            return
+
         min_d_normed = min_deviation / max_deviation
         min_s_normed = min_susceptibility / max_susceptibility
-        susc_weight = min(1.0, min_s_normed / min_d_normed)
+        susc_weight = min(1.0, min_s_normed / min_d_normed) if min_d_normed != 0 else 1.0
         for k, s in self.scores.items():
             if np.isinf(s.deviation()) or np.isinf(s.susceptibility):
                 # Infinity indicates missing data and doesn't need handling.
@@ -148,6 +151,8 @@ def sensitivity_score(
         for d, c in zip(dev, con):
             sum += np.sum(d) / len(d) * c
             total_contrib += c
+        if total_contrib == 0:
+            return 0.0, 0.0
         mu = sum / total_contrib
 
         sum = 0.0
@@ -159,7 +164,11 @@ def sensitivity_score(
     mu_noisy, sigma_sq_noisy = mu_sigma_sq(noisy_dev, noisy_con)
     mu_ref, sigma_sq_ref = mu_sigma_sq(ref_dev, ref_con)
 
-    return abs(mu_noisy - mu_ref) / np.sqrt(sigma_sq_noisy + sigma_sq_ref)
+    denom = np.sqrt(sigma_sq_noisy + sigma_sq_ref)
+    if denom == 0:
+        return 0.0 if mu_noisy == mu_ref else np.inf
+
+    return abs(mu_noisy - mu_ref) / denom
 
 
 def print_cli_formatted(scores, selection):
