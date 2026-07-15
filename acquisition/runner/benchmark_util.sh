@@ -136,7 +136,7 @@ estimate_time() {
   # Flatten the content of all files to a list of numbers and iterate it
   for t in $(cat $1/*); do
     sum=$((sum + t))
-    if [[ $t > $max ]]; then
+    if (( t > max )); then
       max=$t
     fi
     count=$((count + 1))
