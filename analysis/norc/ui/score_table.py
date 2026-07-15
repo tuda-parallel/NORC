@@ -21,7 +21,7 @@ import numpy as np
 import norc.helpers.util as util
 from norc.ui.ui_util import score_color
 from norc.core.plotmanager import PlotManager
-from norc.ui.qt_utils import table_dimensions
+from norc.ui.qt_utils import table_dimensions, enable_two_line_header, wrappable_labels
 
 
 class dashed_outline_delegate(QStyledItemDelegate):
@@ -94,6 +94,8 @@ class score_table(QTableWidget):
 
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        enable_two_line_header(self.horizontalHeader())
+        enable_two_line_header(self.verticalHeader())
 
         self.update_table()
 
@@ -154,17 +156,17 @@ class score_table(QTableWidget):
         idim1 = self.dim_items(self.inner_dims[1])
 
         self.setColumnCount(len(odim0))
-        self.setHorizontalHeaderLabels(odim0)
+        self.setHorizontalHeaderLabels(wrappable_labels(odim0))
         self.setRowCount(len(odim1))
-        self.setVerticalHeaderLabels(odim1)
+        self.setVerticalHeaderLabels(wrappable_labels(odim1))
 
         for ocol, od0 in enumerate(odim0):
             for orow, od1 in enumerate(odim1):
                 table = QTableWidget()
                 table.setColumnCount(len(idim0))
-                table.setHorizontalHeaderLabels(idim0)
+                table.setHorizontalHeaderLabels(wrappable_labels(idim0))
                 table.setRowCount(len(idim1))
-                table.setVerticalHeaderLabels(idim1)
+                table.setVerticalHeaderLabels(wrappable_labels(idim1))
 
                 # Apply custom delegate for dashed outline selection
                 delegate = dashed_outline_delegate()
@@ -172,6 +174,8 @@ class score_table(QTableWidget):
 
                 table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
                 table.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
+                enable_two_line_header(table.horizontalHeader())
+                enable_two_line_header(table.verticalHeader())
 
                 for icol, id0 in enumerate(idim0):
                     for irow, id1 in enumerate(idim1):
