@@ -683,18 +683,18 @@ if $local_execution; then
   cat >"$config_dir/experiments.cfg" <<EOL
 # benchmark param_set sys_template nodes processes_per_node threads_per_process
 
-minife x20y20z20  ${system_name} 1 1 ${threads_per_process}
-minife x40y20z20  ${system_name} 1 2 ${threads_per_process}
-minife x80y20z20  ${system_name} 1 4 ${threads_per_process}
-minife x160y20z20 ${system_name} 1 8 ${threads_per_process}
+minife weak_x_scaled ${system_name} 1 1 ${threads_per_process}
+minife weak_x_scaled ${system_name} 1 2 ${threads_per_process}
+minife weak_x_scaled ${system_name} 1 4 ${threads_per_process}
+minife weak_x_scaled ${system_name} 1 8 ${threads_per_process}
 
-lammps x20y20z20  ${system_name} 1 1 ${threads_per_process}
-lammps x40y20z20  ${system_name} 1 2 ${threads_per_process}
-lammps x80y20z20  ${system_name} 1 4 ${threads_per_process}
-lammps x160y20z20 ${system_name} 1 8 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 1 1 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 1 2 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 1 4 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 1 8 ${threads_per_process}
 
-lulesh s10r1  ${system_name} 1 1 ${threads_per_process}
-lulesh s10r8  ${system_name} 1 8 ${threads_per_process}
+lulesh s_scaled ${system_name} 1 1 ${threads_per_process}
+lulesh s_scaled ${system_name} 1 8 ${threads_per_process}
 EOL
 else
   cores_this_node=$(getconf _NPROCESSORS_ONLN)
@@ -705,19 +705,19 @@ else
   cat >"$config_dir/experiments.cfg" <<EOL
 # benchmark param_set sys_template nodes processes_per_node threads_per_process
 
-minife x20y20z20  ${system_name} 1 1 ${threads_per_process}
-minife x40y20z20  ${system_name} 2 1 ${threads_per_process}
-minife x80y20z20  ${system_name} 4 1 ${threads_per_process}
-minife x160y20z20 ${system_name} 8 1 ${threads_per_process}
+minife weak_x_scaled ${system_name} 1 1 ${threads_per_process}
+minife weak_x_scaled ${system_name} 2 1 ${threads_per_process}
+minife weak_x_scaled ${system_name} 4 1 ${threads_per_process}
+minife weak_x_scaled ${system_name} 8 1 ${threads_per_process}
 
-lammps x20y20z20  ${system_name} 1 1 ${threads_per_process}
-lammps x40y20z20  ${system_name} 2 1 ${threads_per_process}
-lammps x80y20z20  ${system_name} 4 1 ${threads_per_process}
-lammps x160y20z20 ${system_name} 8 1 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 1 1 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 2 1 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 4 1 ${threads_per_process}
+lammps weak_x_scaled ${system_name} 8 1 ${threads_per_process}
 
-lulesh s10r1  ${system_name} 1 1 ${threads_per_process}
-lulesh s10r8  ${system_name} 8 1 ${threads_per_process}
-lulesh s10r27 ${system_name} 27 1 ${threads_per_process}
+lulesh s_scaled ${system_name} 1 1 ${threads_per_process}
+lulesh s_scaled ${system_name} 8 1 ${threads_per_process}
+lulesh s_scaled ${system_name} 27 1 ${threads_per_process}
 EOL
 fi
 editor=${FCEDIT:-${VISUAL:-${EDITOR}}}

@@ -198,6 +198,8 @@ build_arrays() {
       local nodes=$(get_positional 4 $experiment)
       local processes=$(get_positional 5 $experiment)
       local threads=$(get_positional 6 $experiment)
+      # Total number of MPI ranks, available to params-file formulas as $((ranks)).
+      local ranks=$((nodes * processes))
 
       local res_cfg="n${nodes}p${processes}t${threads}"
       local result_dir="$(pwd)/result/$benchmark/$system/$res_cfg"
@@ -232,7 +234,10 @@ build_arrays() {
 
           local jobfile=$ARRAY_DIR/$job_idx
 
-          local benchmark_params=$(awk "/^$param_set/ {print \$0}" config/benchmarks/$benchmark/params | cut -f 2- -d ' ')
+          local benchmark_params=$(awk -v p="$param_set" '$1 == p {$1 = ""; sub(/^ /, ""); print}' "config/benchmarks/$benchmark/params")
+          # Params-file entries may embed bash arithmetic, e.g. `-r $((ranks))`, so that
+          # a single line scales with the actual rank/thread counts of this experiment.
+          benchmark_params=$(eval "echo \"$benchmark_params\"")
 
           echo "#!/bin/bash" >"$jobfile"
           echo "export EXPERIMENT_DIRECTORY=\"$EXPERIMENT_DIRECTORY\"" >>"$jobfile"

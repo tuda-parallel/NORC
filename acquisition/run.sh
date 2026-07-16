@@ -9,4 +9,8 @@
 # For more information, see the LICENSE file in the project root:
 # https://github.com/tuda-parallel/NORC/blob/main/LICENSE
 cd build || exit 1
+
+# Copying the build directory (e.g. via a network share or archive) doesn't
+# reliably preserve the executable bit, so ensure it's set before running.
+chmod +x ./run_benchmarks.sh
 ./run_benchmarks.sh "$@"
