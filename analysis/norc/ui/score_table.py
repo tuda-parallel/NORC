@@ -21,7 +21,12 @@ import numpy as np
 import norc.helpers.util as util
 from norc.ui.ui_util import score_color
 from norc.core.plotmanager import PlotManager
-from norc.ui.qt_utils import table_dimensions, enable_two_line_header, wrappable_labels
+from norc.ui.qt_utils import (
+    table_dimensions,
+    enable_two_line_header,
+    wrappable_labels,
+    prevent_stretch_truncation,
+)
 
 
 class dashed_outline_delegate(QStyledItemDelegate):
@@ -163,6 +168,13 @@ class score_table(QTableWidget):
         for ocol, od0 in enumerate(odim0):
             for orow, od1 in enumerate(odim1):
                 table = QTableWidget()
+                # table_dimensions() sizes the outer cell to fit this table's
+                # content, but the outer table can still shrink that cell
+                # below the ideal size (e.g. when the window itself is too
+                # small), so keep scrollbars available to reach any content
+                # that ends up clipped.
+                table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+                table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
                 table.setColumnCount(len(idim0))
                 table.setHorizontalHeaderLabels(wrappable_labels(idim0))
                 table.setRowCount(len(idim1))
@@ -189,6 +201,7 @@ class score_table(QTableWidget):
                         )
 
                 table.itemClicked.connect(self.handleCellActivated)
+                prevent_stretch_truncation(table, 10, 5)
                 w, h = table_dimensions(table, 10, 5)
                 self.setColumnWidth(ocol, w)
                 self.setRowHeight(orow, h)

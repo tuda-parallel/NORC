@@ -115,8 +115,6 @@ def is_noiseless(noise_pattern: str):
 # This makes plotting the same data multiple times more efficient.
 def prepare_plot(settings: plot_settings, p: util.measurement_info):
     # TODO: Show progress
-    if settings.font_size:
-        plt.rcParams.update({"font.size": settings.font_size})
     visits, contributions, deviations = scr.get_filtered_data(p, settings.selection, settings.tree)
     deviation_score = scr.deviation_score_from_data(visits, contributions, deviations, settings.selection)
 
