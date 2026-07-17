@@ -642,6 +642,10 @@ EOL
 
   sed -i "s/§time/$(slurmify_time 120)/g" "$exec_dir/job.sh"
 
+  # There is no real "norc_config_test" binary -- this job only exists to verify that
+  # sbatch/srun submission itself works, so run something that's always available instead.
+  sed -i "s/\"$test_benchmark\"/true/g" "$exec_dir/job.sh"
+
   pushd "$exec_dir/scratch" >/dev/null
   if [ "$(is_array_based ../job.sh)" = true ]; then
     sbatch_output=$(sbatch --wait --array=0-0 ../job.sh 2>&1)

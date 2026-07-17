@@ -132,7 +132,10 @@ run_arrays() {
     fi
     set +o pipefail
     popd
-    job_id=$(get_positional 4 $batch_output)
+    # sbatch may print a preamble before
+    # the final "Submitted batch job <id>" line, so parse that line by content rather than
+    # by absolute word position, which would otherwise pick up a banner token.
+    job_id=$(echo "$batch_output" | awk '/Submitted batch job/{print $NF}')
     # The next job has to wait for this one to finish in order to prevent cross-contamination of noise patterns.
 
     for task_id in $(ls "$ARRAY_DIR"); do
