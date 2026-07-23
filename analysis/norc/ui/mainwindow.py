@@ -8,7 +8,7 @@
 import os
 from copy import copy
 
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox, QStyle
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox, QStyle, QProgressDialog, QApplication
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
 import matplotlib
@@ -124,13 +124,57 @@ class main_window(QMainWindow):
                 dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 resp = dlg.exec()
                 if resp == QMessageBox.Yes:
-                    analyze_experiment(selected)
+                    if not self._calculate_deviations(selected):
+                        return
                 else:
                     return
 
             self.appstate.plt_mgr.open_experiment(selected)
 
         self.update_config()
+
+    def _calculate_deviations(self, experiment_root):
+        """Run the deviation calculation while showing a modal progress window.
+
+        The calculation runs on the GUI thread; the event loop is pumped after
+        each measurement (via the progress callback) so the dialog stays
+        responsive and the bar advances. Returns True on success, or False if
+        the calculation failed, in which case an error is shown and any partial
+        output has already been cleaned up by analyze_experiment.
+        """
+        progress = QProgressDialog(self.ui)
+        progress.setWindowTitle("Analyzing experiment")
+        progress.setLabelText("Calculating deviations…")
+        # analyze_experiment has no safe mid-run cancellation point, so don't offer one.
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        # Show a busy indicator until the first callback reports the measurement count.
+        progress.setRange(0, 0)
+        progress.show()
+
+        def on_progress(done, total):
+            progress.setMaximum(total)
+            progress.setValue(done)
+            progress.setLabelText(f"Calculating deviations… ({done}/{total} measurements)")
+            QApplication.processEvents()
+
+        error = None
+        try:
+            analyze_experiment(experiment_root, progress_callback=on_progress)
+        except Exception as e:
+            error = str(e)
+        progress.close()
+
+        if error is not None:
+            dlg = QMessageBox(self)
+            dlg.setIcon(QMessageBox.Critical)
+            dlg.setText(f"Deviation calculation failed:\n{error}")
+            dlg.exec()
+            return False
+        return True
 
     def open_generate_dialog(self):
         if not self.appstate.plt_mgr.experiment_root:

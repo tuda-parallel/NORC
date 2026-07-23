@@ -157,37 +157,59 @@ def analyze(tree: ExperimentTree, output_dir, info: dir_info):
         write_measurement(tree, os.path.join(output_dir, pickle_name), callpaths_only)
 
 
-def analyze_experiment(experiment_root):
+def analyze_experiment(experiment_root, progress_callback=None):
+    """Calculate per-callpath deviations for an experiment and write them to
+    ``result/.deviations``.
+
+    ``progress_callback``, when given, is called as ``progress_callback(done, total)``
+    once before any work (``done == 0``) and again after each measurement is
+    analysed. It lets a GUI drive a progress window; when omitted a ``tqdm`` bar
+    is printed to the command line instead (the behaviour used by ``main()``).
+    """
     with open_experiment_source(experiment_root) as tree:
         result_dir = os.path.join(tree.root, "result")
         output_dir = os.path.join(tree.root, "result", ".deviations")
         tree.remove_subtree(output_dir)
 
-        # First, collect all the files belonging to measurements with identical parameters.
-        # These are then analyzed together.
-        measurements = {}
-        for meas in iterate_measurements(tree, result_dir):
-            key = meas.tuple()
-            if key not in measurements:
-                measurements[key] = meas
-            else:
-                measurements[key].dirs += meas.dirs
-
-            # Noisy measurements are also added to an umbrella noise pattern that combines all noisy measurements.
-            # NOTE: Doing it like this is not the most efficent approach since it requires each file to be loaded and processed twice.
-            if meas.noise_pattern != "NO_NOISE":
-                meas_allnoise = copy(meas)
-                meas_allnoise.noise_pattern = "ALL_NOISE"
-                key = meas_allnoise.tuple()
+        try:
+            # First, collect all the files belonging to measurements with identical parameters.
+            # These are then analyzed together.
+            measurements = {}
+            for meas in iterate_measurements(tree, result_dir):
+                key = meas.tuple()
                 if key not in measurements:
-                    measurements[key] = meas_allnoise
+                    measurements[key] = meas
                 else:
-                    measurements[key].dirs += meas_allnoise.dirs
+                    measurements[key].dirs += meas.dirs
 
-        # Analyse and store each measurement
-        # NOTE: Parallelizing this doesn't seem to help since most time is spent doing file IO.
-        for meas in tqdm(measurements.values()):
-            analyze(tree, output_dir, meas)
+                # Noisy measurements are also added to an umbrella noise pattern that combines all noisy measurements.
+                # NOTE: Doing it like this is not the most efficent approach since it requires each file to be loaded and processed twice.
+                if meas.noise_pattern != "NO_NOISE":
+                    meas_allnoise = copy(meas)
+                    meas_allnoise.noise_pattern = "ALL_NOISE"
+                    key = meas_allnoise.tuple()
+                    if key not in measurements:
+                        measurements[key] = meas_allnoise
+                    else:
+                        measurements[key].dirs += meas_allnoise.dirs
+
+            # Analyse and store each measurement
+            # NOTE: Parallelizing this doesn't seem to help since most time is spent doing file IO.
+            values = list(measurements.values())
+            if progress_callback is not None:
+                progress_callback(0, len(values))
+                for done, meas in enumerate(values, start=1):
+                    analyze(tree, output_dir, meas)
+                    progress_callback(done, len(values))
+            else:
+                for meas in tqdm(values):
+                    analyze(tree, output_dir, meas)
+        except BaseException:
+            # A partial .deviations directory would be indistinguishable from a
+            # complete one to callers that only check whether it exists, so make
+            # sure an interrupted or failed run leaves nothing behind.
+            tree.remove_subtree(output_dir)
+            raise
 
 
 def main():
