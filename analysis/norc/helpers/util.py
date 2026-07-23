@@ -261,9 +261,10 @@ class DirTree(ExperimentTree):
 
 
 class ZipTree(ExperimentTree):
-    def __init__(self, zip_path):
+    def __init__(self, zip_path, read_only=False):
         self.zip_path = os.path.abspath(zip_path)
-        self._zf = zipfile.ZipFile(self.zip_path, "a")
+        self.read_only = read_only
+        self._zf = zipfile.ZipFile(self.zip_path, "r" if read_only else "a")
         self._reindex()
 
         # A zipped experiment directory is often wrapped in one extra top-level folder
@@ -332,6 +333,8 @@ class ZipTree(ExperimentTree):
         return self._zf.open(self._rel(path), "r")
 
     def write_bytes(self, path, data: bytes):
+        if self.read_only:
+            raise PermissionError(f"'{self.zip_path}' was opened read-only")
         rel = self._rel(path)
         self._zf.writestr(rel, data)
         parts = rel.split("/")
@@ -340,6 +343,8 @@ class ZipTree(ExperimentTree):
         self._files.add(rel)
 
     def remove_subtree(self, path):
+        if self.read_only:
+            raise PermissionError(f"'{self.zip_path}' was opened read-only")
         rel = self._rel(path)
         if rel not in self._dirs and rel not in self._files:
             return
@@ -368,12 +373,17 @@ class ZipTree(ExperimentTree):
         self._zf.close()
 
 
-def open_experiment_source(path) -> ExperimentTree:
-    """Opens an experiment directory or a zip archive of one for reading."""
+def open_experiment_source(path, read_only=False) -> ExperimentTree:
+    """Opens an experiment directory or a zip archive of one.
+
+    ``read_only`` only affects zip archives (a ``DirTree`` never restricts its
+    own filesystem access): pass it whenever the caller won't write to the
+    archive, so it isn't opened in append mode unnecessarily.
+    """
     if os.path.isdir(path):
         return DirTree(path)
     if os.path.isfile(path) and zipfile.is_zipfile(path):
-        return ZipTree(path)
+        return ZipTree(path, read_only=read_only)
     raise FileNotFoundError(f"'{path}' is neither a directory nor a zip archive")
 
 

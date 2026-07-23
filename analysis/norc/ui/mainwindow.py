@@ -65,6 +65,9 @@ class main_window(QMainWindow):
 
         self.update_config()
 
+        self.ui.btn_flt_select_all.clicked.connect(lambda: self.set_current_filters_checked(True))
+        self.ui.btn_flt_deselect_all.clicked.connect(lambda: self.set_current_filters_checked(False))
+
         self.update_filter_ui()
         self.appstate.plt_mgr.reconfigured.connect(self.update_filter_ui)
 
@@ -102,7 +105,7 @@ class main_window(QMainWindow):
                 # Only used to validate the selection; closed before analyze_experiment
                 # and plt_mgr.open_experiment (which open their own handles) run, so we
                 # never have more than one handle on the same zip archive open at once.
-                with open_experiment_source(selected) as tree:
+                with open_experiment_source(selected, read_only=True) as tree:
                     has_result = tree.isdir(os.path.join(tree.root, "result"))
                     has_deviations = has_result and tree.isdir(os.path.join(tree.root, "result", ".deviations"))
             except FileNotFoundError as e:
@@ -186,32 +189,61 @@ class main_window(QMainWindow):
         dialog = generate_dialog(self.appstate, self)
         dialog.exec()
 
+    # experiment_filter treats an empty filter string as "accept everything",
+    # since that's also what it means when no filter was specified at all
+    # (e.g. from the CLI). That makes "" ambiguous with "the user unchecked
+    # every box", which would otherwise show everything instead of nothing.
+    # Use a sentinel that can't match any real dimension value to represent
+    # that case explicitly.
+    _NONE_SELECTED = "\x00none-selected\x00"
+
+    def _build_filter_string(self, key):
+        boxes = self.filter_boxes[key]
+        checked = [cb.text() for cb in boxes if cb.isChecked()]
+        if boxes and not checked:
+            return self._NONE_SELECTED
+        return ",".join(checked)
+
     def apply_filters(self):
         if self._filtering_in_progress:
             return
         self._filtering_in_progress = True
-        benchmarks = ""
-        systems = ""
-        noises = ""
-        metrics = ""
 
-        for cb in self.filter_boxes["benchmark"]:
-            if cb.isChecked():
-                benchmarks += f"{cb.text()},"
-        for cb in self.filter_boxes["system"]:
-            if cb.isChecked():
-                systems += f"{cb.text()},"
-        for cb in self.filter_boxes["noise"]:
-            if cb.isChecked():
-                noises += f"{cb.text()},"
-        for cb in self.filter_boxes["counter"]:
-            if cb.isChecked():
-                metrics += f"{cb.text()},"
+        benchmarks = self._build_filter_string("benchmark")
+        systems = self._build_filter_string("system")
+        noises = self._build_filter_string("noise")
+        metrics = self._build_filter_string("counter")
 
         self.appstate.plt_mgr.set_filter(
             experiment_filter(benchmarks, systems, noises, metrics)
         )
         self._filtering_in_progress = False
+
+    def set_current_filters_checked(self, checked):
+        page_to_key = {
+            self.ui.pg_flt_benchmark: "benchmark",
+            self.ui.pg_flt_system: "system",
+            self.ui.pg_flt_noise: "noise",
+            self.ui.pg_flt_metric: "counter",
+        }
+        key = page_to_key.get(self.ui.tb_filters.currentWidget())
+        if key is None:
+            return
+        # Setting each checkbox individually would fire apply_filters() per
+        # checkbox, and that in turn triggers update_filter_ui() (via the
+        # plt_mgr.reconfigured signal), which tears down and rebuilds this
+        # very list of checkboxes mid-loop. Block signals and apply once at
+        # the end instead.
+        try:
+            for cb in self.filter_boxes[key]:
+                cb.blockSignals(True)
+            for cb in self.filter_boxes[key]:
+                cb.setChecked(checked)
+            QApplication.processEvents()
+        finally:
+            for cb in self.filter_boxes[key]:
+                cb.blockSignals(False)
+        self.apply_filters()
 
     def update_filter_ui(self):
         plt_mgr = self.appstate.plt_mgr

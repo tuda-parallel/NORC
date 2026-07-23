@@ -124,7 +124,7 @@ class PlotManager(QObject):
             if self.plot_settings.tree is not None:
                 self.plot_settings.tree.close()
             self.experiment_root = experiment_root
-            self.plot_settings.tree = open_experiment_source(experiment_root)
+            self.plot_settings.tree = open_experiment_source(experiment_root, read_only=True)
             self.update_available_measurements_()
             return True, True
 

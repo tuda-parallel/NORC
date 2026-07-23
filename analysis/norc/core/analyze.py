@@ -50,7 +50,7 @@ def analyze(tree: ExperimentTree, output_dir, info: dir_info):
         try:
             with tree.cubex_source(cubex_path) as cubex_source, CubexParser(cubex_source) as experiment:
                 for metric_name in selected_metrics:
-                    metric_values = experiment.get_metric_values(experiment.get_metric_by_name(metric_name))
+                    metric_values = experiment.get_metric_values(experiment.get_metric_by_name(metric_name),allow_full_uint64_values=True)
 
                     total_callpaths = 0
                     skipped_name = 0
