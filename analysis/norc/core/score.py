@@ -18,8 +18,14 @@ from norc.helpers.util import (
     available_measurements,
     warn,
     load_measurement,
+    write_measurement,
     open_experiment_source,
 )
+
+# The (contribution, visit) threshold combos that get re-requested often
+# enough (including the CLI default and the GUI's usual "real data" setting) to be worth
+# caching in the experiment archive instead of recomputing every time.
+CACHEABLE_SELECTIONS = {(0, 0), (0.1, 0), (1, 0), (0, 100), (0.1, 100), (1, 100)}
 
 
 # Summarized deviation and susceptibility scores
@@ -110,7 +116,7 @@ def get_filtered_data(info: measurement_info, selection: data_selection, tree):
         measurement = load_measurement(tree, path)
         for callpath in measurement:
             if not selection or (
-                callpath.visits >= selection.visit_threshold and callpath.contribution >= selection.contrib_threshold
+                    callpath.visits >= selection.visit_threshold and callpath.contribution >= selection.contrib_threshold
             ):
                 visits.append(callpath.visits)
                 contributions.append(callpath.contribution)
@@ -128,11 +134,11 @@ def deviation_score(info: measurement_info, selection: data_selection, filtered_
 
 
 def sensitivity_score(
-    noisy_info: measurement_info,
-    ref_info: measurement_info,
-    selection: data_selection,
-    noisy_data,
-    ref_data,
+        noisy_info: measurement_info,
+        ref_info: measurement_info,
+        selection: data_selection,
+        noisy_data,
+        ref_data,
 ):
     noisy_vis, noisy_con, noisy_dev = noisy_data
     ref_vis, ref_con, ref_dev = ref_data
@@ -171,6 +177,187 @@ def sensitivity_score(
     return abs(mu_noisy - mu_ref) / denom
 
 
+def _moving_average(ys, window):
+    window = min(window, len(ys))
+    if window < 3:
+        return ys
+    # Edge-padded so it doesn't shift the curve inward or flatten it towards
+    # zero at the boundaries.
+    pad = window // 2
+    padded = np.pad(ys, (pad, pad), mode="edge")
+    return np.convolve(padded, np.ones(window) / window, mode="valid")[: len(ys)]
+
+
+def smooth_curve(values, window=1):
+    """Moving-average smooth `values`, e.g. for plotting alongside `find_knee`.
+
+    Non-finite entries (`np.inf`) are left untouched and excluded from the
+    averaging of their neighbors, matching how `find_knee` treats them.
+    """
+    values = np.asarray(values, dtype=float)
+    finite_idx = [i for i, v in enumerate(values) if np.isfinite(v)]
+    result = values.copy()
+    if len(finite_idx) >= 3:
+        result[finite_idx] = _moving_average(values[finite_idx], window)
+    return result
+
+
+def find_knee(values, smoothing_window=1):
+    """Find the index of the knee/elbow in a sequence of scores.
+
+    Uses the maximum-distance-to-chord method: the knee is the point that
+    sits furthest above the straight line connecting the first and last
+    point, after both axes have been normalized to [0, 1]. This is a
+    simple, dependency-free approximation of the Kneedle algorithm (Satopaa
+    et al., 2011) that works well for the roughly convex/concave,
+    monotonically decreasing resilience curves produced by
+    `score_group.scores` once sorted by `rel_resilience`. Restricting to
+    points above the chord (rather than the largest distance in either
+    direction) also handles S-shaped curves, which bulge below the chord on
+    a second, unrelated bend.
+
+    Args:
+        values: Sequence of floats, assumed sorted in descending order
+            (e.g., `rel_resilience` scores ordered best-to-worst).
+            Non-finite entries (`np.inf`, from missing data) are ignored
+            when locating the knee, but do not shift the indices of the
+            remaining values.
+        smoothing_window: Size of the moving-average window applied to
+            `values` before looking for bends. Keeps small local wiggles
+            (noise) from shifting exactly which index gets picked. Set to
+            1 to disable.
+
+    Returns:
+        Index (0-based, into the original `values`) of the knee point.
+        Everything at or before this index is considered "before the
+        elbow"; this index itself should typically be included in a
+        selection. Returns `len(values) - 1` if fewer than 3 finite values
+        are available (nothing to bend), or if all finite values coincide.
+    """
+    n = len(values)
+    finite_idx = [i for i, v in enumerate(values) if np.isfinite(v)]
+    if len(finite_idx) < 3:
+        return n - 1
+
+    xs = np.array(finite_idx, dtype=float)
+    ys = _moving_average(np.array([values[i] for i in finite_idx], dtype=float), smoothing_window)
+
+    # Normalize both axes to [0, 1] so the result does not depend on the
+    # absolute scale/units of `values` or on how many points there are.
+    x_range = xs.max() - xs.min()
+    x_norm = (xs - xs.min()) / x_range if x_range > 0 else np.zeros_like(xs)
+    y_range = ys.max() - ys.min()
+    y_norm = (ys - ys.min()) / y_range if y_range > 0 else np.zeros_like(ys)
+
+    # Perpendicular distance of each normalized point from the chord
+    # connecting the first and last normalized point.
+    x0, y0 = x_norm[0], y_norm[0]
+    x1, y1 = x_norm[-1], y_norm[-1]
+    dx, dy = x1 - x0, y1 - y0
+    chord_len = np.hypot(dx, dy)
+    if chord_len == 0:
+        return n - 1  # all (finite) points coincide
+
+    # Signed distance to the chord: positive means the point sits above the
+    # chord, which for a decreasing curve is the classic "elbow" bulge (lots
+    # of good items, then a fast drop). S-shaped curves also bulge below the
+    # chord on their second bend; that's a real inflection but not the knee
+    # we want, so it's only used as a fallback for curves that never rise
+    # above the chord at all (fully convex, no plateau to speak of).
+    cross = (dx * (y_norm - y0) - dy * (x_norm - x0)) / chord_len
+    if np.any(cross > 0):
+        best = int(np.argmax(cross))
+    else:
+        best = int(np.argmax(np.abs(cross)))
+    return finite_idx[best]
+
+
+def _test_find_knee():
+    # Plain concave elbow: the only bulge is above the chord.
+    assert find_knee([1.0, 0.9, 0.6, 0.2, 0.1, 0.0]) == 1
+
+    # S-curve: flat, steep drop, flat again, steep drop again. That second
+    # drop bulges *below* the chord - a real inflection, but not the elbow
+    # we want, since it's a plateau-to-plateau step, not "before this most
+    # items are still fine". Restricting to the above-chord side picks the
+    # first (and only) genuine knee instead.
+    s_curve = [1.0, 0.98, 0.95, 0.6, 0.3, 0.28, 0.27, 0.1, 0.02, 0.0]
+    assert find_knee(s_curve) == 1
+
+    # Noisy decreasing curve with a tiny single-point downdraw early on and
+    # the real cliff much further along. The downdraw bulges below the
+    # chord, so it's excluded on its own merits; smoothing still nudges the
+    # exact index picked on the (above-chord) plateau leading into the drop.
+    noisy = [1.0, 0.99, 0.98, 0.99, 0.85, 0.99, 0.98, 0.97, 0.96, 0.5, 0.2, 0.0]
+    assert find_knee(noisy, smoothing_window=1) == 8
+    assert find_knee(noisy) == 7
+
+
+def plot_resilience_curve(ax, sorted_counters):
+    """Draw the resilience-ranking-with-knee plot onto `ax`.
+
+    `sorted_counters` is a list of (key, score) pairs, best-to-worst by
+    `rel_resilience` (as produced by `sorted(scores.items(), key=lambda it:
+    it[1].rel_resilience, reverse=True)`). Shared by the Score tab in the
+    GUI and `norc_score --plot` so both show the exact same thing.
+    """
+    counter_names = [measurement_info.from_key(key).counter for key, _ in sorted_counters]
+    resiliences = np.array([sc.rel_resilience for _, sc in sorted_counters], dtype=float)
+    ranks = np.arange(1, len(resiliences) + 1)
+    finite = np.isfinite(resiliences)
+
+    # Rank (as counter name) on the x axis, resilience on y.
+    ax.plot(ranks[finite], resiliences[finite], marker="o", markersize=3)
+
+    if finite.sum() >= 3:
+        knee_idx = find_knee(list(resiliences))
+        finite_ranks = ranks[finite]
+        finite_resiliences = resiliences[finite]
+
+        # Same smoothing find_knee applies before looking for bends - shown
+        # so it's clear why the knee doesn't sit on a raw wiggle.
+        # smoothed = smooth_curve(resiliences)
+        # ax.plot(finite_ranks, smoothed[finite], linestyle="-", linewidth=1, label="smoothed")
+        # Same chord find_knee measures distance-to-selection against: the
+        # straight line from the first to the last finite point.
+        # ax.plot(
+        #     [finite_ranks[0], finite_ranks[-1]],
+        #     [finite_resiliences[0], finite_resiliences[-1]],
+        #     color="gray",
+        #     linestyle=":",
+        #     linewidth=1,
+        #     label="selection reference line",
+        # )
+        if np.isfinite(resiliences[knee_idx]):
+            ax.axvline(ranks[knee_idx], color="red", linestyle="--", linewidth=1)
+            ax.axhline(resiliences[knee_idx], color="red", linestyle="--", linewidth=1)
+            ax.annotate(
+                f"{resiliences[knee_idx]:.2f}",
+                (ranks[-1], resiliences[knee_idx]),
+                textcoords="offset points",
+                xytext=(4, 2),
+                ha="left",
+                fontsize="small",
+                color="red",
+            )
+            ax.plot(ranks[knee_idx], resiliences[knee_idx], "ro")
+            ax.annotate(
+                "knee",
+                (ranks[knee_idx], resiliences[knee_idx]),
+                textcoords="offset points",
+                xytext=(6, 6),
+                color="red",
+            )
+        # ax.legend(loc="best", fontsize="small")
+
+    ax.set_xticks(ranks)
+    ax.set_xticklabels(counter_names, fontsize="small", rotation=90, family="monospace")
+    ax.set_ylim(0, 1)
+    ax.set_xlabel("Counter")
+    ax.set_ylabel("Resilience score")
+    ax.set_title("Counters ranked by resilience")
+
+
 def print_cli_formatted(scores, selection):
     print(
         "================================================================================================================"
@@ -184,11 +371,15 @@ def print_cli_formatted(scores, selection):
 
     print("Top Counters for constraints:")
 
+    sorted_items = sorted(scores.items(), key=lambda it: it[1].rel_resilience, reverse=True)
+    knee_idx = find_knee([sc.rel_resilience for _, sc in sorted_items])
+
     place = 1
-    for key, sc in sorted(scores.items(), key=lambda it: it[1].rel_resilience, reverse=True):
+    for i, (key, sc) in enumerate(sorted_items):
         info = measurement_info.from_key(key)
+        marker = "  <-- knee" if i == knee_idx else ""
         print(
-            f"{place}.\t{info.counter}\tResilience: {sc.rel_resilience:.4f}\tDeviation: {sc.deviation():.4f}%\tSuscept.: {sc.susceptibility:.4f}"
+            f"{place}.\t{info.counter}\tResilience: {sc.rel_resilience:.4f}\tDeviation: {sc.deviation():.4f}%\tSuscept.: {sc.susceptibility:.4f}{marker}"
         )
         place += 1
     print(
@@ -216,25 +407,61 @@ def print_tabular(scores, selection):
     print("\\end{table}")
 
 
-def compute_scores(experiment_root, selection):
-    tree = open_experiment_source(experiment_root)
-    deviation_dir = os.path.join(tree.root, "result", ".deviations")
+class ScoreComputationCancelled(Exception):
+    """Raised from a `compute_scores` progress_callback to abort the computation."""
 
-    noisy = {}
-    ref = {}
-    for info in available_measurements(tree, deviation_dir, selection).values():
-        key = info.key()
-        if info.noise_pattern == "NO_NOISE":
-            ref[key] = info
-        else:
-            noisy[key] = info
 
-    scores = {}
-    for key in tqdm(noisy.keys()):
-        info_ref = measurement_info.from_key(key)
-        scores[key] = score(noisy[key], ref[info_ref.noiseless_key()], selection, tree)
+def _scores_cache_path(tree, selection):
+    return os.path.join(
+        tree.root, "result", ".scores", f"c{selection.contrib_threshold}_v{selection.visit_threshold}.pickle"
+    )
 
-    return score_group(scores)
+
+def compute_scores(experiment_root, selection, progress_callback=None):
+    """Compute resilience scores for `experiment_root`.
+
+    `progress_callback`, when given, is called as `progress_callback(done, total)`
+    before each measurement is scored. It may raise `ScoreComputationCancelled`
+    to abort early (e.g. from a GUI cancel button).
+
+    For the common threshold combos in `CACHEABLE_SELECTIONS`, the result is
+    cached in the experiment archive (`result/.scores/`) so re-opening the
+    same experiment doesn't redo the (expensive) scoring pass.
+    """
+    with open_experiment_source(experiment_root) as tree:
+        cacheable = (selection.contrib_threshold, selection.visit_threshold) in CACHEABLE_SELECTIONS
+        cache_path = _scores_cache_path(tree, selection)
+
+        if cacheable and tree.exists(cache_path):
+            cached = load_measurement(tree, cache_path)
+            if cached is not None:
+                return cached
+
+        deviation_dir = os.path.join(tree.root, "result", ".deviations")
+
+        noisy = {}
+        ref = {}
+        for info in available_measurements(tree, deviation_dir, selection).values():
+            key = info.key()
+            if info.noise_pattern == "NO_NOISE":
+                ref[key] = info
+            else:
+                noisy[key] = info
+
+        keys = list(noisy.keys())
+        scores = {}
+        for i, key in enumerate(tqdm(keys) if progress_callback is None else keys):
+            if progress_callback is not None:
+                progress_callback(i, len(keys))
+            info_ref = measurement_info.from_key(key)
+            scores[key] = score(noisy[key], ref[info_ref.noiseless_key()], selection, tree)
+
+        sgp = score_group(scores)
+
+        if cacheable:
+            write_measurement(tree, cache_path, sgp)
+
+        return sgp
 
 
 def main() -> None:
@@ -259,6 +486,16 @@ def main() -> None:
         "--tex",
         action="store_true",
     )
+    parser.add_argument(
+        "--plot",
+        action="store",
+        nargs="?",
+        const="-",
+        default=None,
+        metavar="FILE",
+        help="Show the resilience/knee plot (same as the GUI's Score tab). "
+             "With a FILE argument, save it there instead of opening a window.",
+    )
 
     args = parser.parse_args()
 
@@ -277,6 +514,18 @@ def main() -> None:
         print_tabular(sgp.scores, selection)
     else:
         print_cli_formatted(sgp.scores, selection)
+
+    if args.plot is not None:
+        import matplotlib.pyplot as plt
+
+        sorted_counters = sorted(sgp.scores.items(), key=lambda it: it[1].rel_resilience, reverse=True)
+        fig, ax = plt.subplots(figsize=(6, 4), layout="constrained")
+        plot_resilience_curve(ax, sorted_counters)
+
+        if args.plot == "-":
+            plt.show()
+        else:
+            fig.savefig(args.plot)
 
 
 if __name__ == "__main__":
