@@ -336,7 +336,7 @@ class ZipTree(ExperimentTree):
         if self.read_only:
             raise PermissionError(f"'{self.zip_path}' was opened read-only")
         rel = self._rel(path)
-        self._zf.writestr(rel, data)
+        self._zf.writestr(rel, data, zipfile.ZIP_DEFLATED)
         parts = rel.split("/")
         for i in range(len(parts) - 1):
             self._dirs.add("/".join(parts[: i + 1]))
@@ -432,10 +432,25 @@ def available_measurements(tree: ExperimentTree, experiment_dir, selection: data
 
 
 class NochrUnpickler(pickle.Unpickler):
+    """Unpickler that tolerates classes pickled while their defining module
+    was run as `__main__` (e.g. `python score.py` instead of the installed
+    `norc_score` entry point), by re-resolving them against the modules that
+    actually define them, regardless of which process/entry point wrote the
+    cache file."""
+
+    # Modules whose classes may end up pickled under the "__main__" name.
+    _MAIN_FALLBACK_MODULES = ("norc.core.score", "norc.core.analyze", "norc.core.generate")
 
     def find_class(self, module, name):
         if module == "util" and name == "callpath_data":
             return callpath_data
+        if module == "__main__":
+            import importlib
+
+            for candidate in self._MAIN_FALLBACK_MODULES:
+                mod = importlib.import_module(candidate)
+                if hasattr(mod, name):
+                    return getattr(mod, name)
         return super().find_class(module, name)
 
 
