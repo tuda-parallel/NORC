@@ -74,6 +74,24 @@ msgbox() {
   echo "$1"
 }
 
+# Picks a usable text editor, preferring the user's configured one and falling
+# back through common editors that are likely to be installed.
+pick_editor() {
+  local editor="${FCEDIT:-${VISUAL:-${EDITOR}}}"
+  if [ -z "$editor" ] || ! "$editor" --version >/dev/null 2>&1; then
+    if nano --version >/dev/null 2>&1; then
+      editor="nano"
+    elif vim --version >/dev/null 2>&1; then
+      editor="vim"
+    elif vi --version >/dev/null 2>&1; then
+      editor="vi"
+    else
+      editor="ed"
+    fi
+  fi
+  echo "$editor"
+}
+
 text_input() {
   if $has_whiptail; then
     REPLY=$(whiptail --title "$app_name configuration assistant" --inputbox "$1" $(dimensions "$1") "$2" 3>&1 1>&2 2>&3)
@@ -99,8 +117,12 @@ multiline_input() {
     if [ -n "$2" ]; then
       printf '%s\n' "$2" >"$tmpfile"
     fi
-    REPLY=$(whiptail --title "$app_name configuration assistant" --editbox "$tmpfile" $(dimensions "$1") 3>&1 1>&2 2>&3)
+    msgbox "$1\n\nPress OK to open an editor. Save and close it to continue."
+    local editor
+    editor=$(pick_editor)
+    "$editor" "$tmpfile"
     local status=$?
+    REPLY=$(cat "$tmpfile")
     rm -f "$tmpfile"
     return $status
   fi
@@ -724,18 +746,7 @@ lulesh s_scaled ${system_name} 8 1 ${threads_per_process}
 lulesh s_scaled ${system_name} 27 1 ${threads_per_process}
 EOL
 fi
-editor=${FCEDIT:-${VISUAL:-${EDITOR}}}
-if ! $editor --version >/dev/null 2>&1; then
-  if nano --version >/dev/null 2>&1; then
-    editor="nano"
-  elif vim --version >/dev/null 2>&1; then
-    editor="vim"
-  elif vi --version >/dev/null 2>&1; then
-    editor="vi"
-  else
-    editor="ed"
-  fi
-fi
+editor=$(pick_editor)
 if yes_no "We prepared a default experiment configuration. Do you want to edit it now?"; then
   $editor "$config_dir/experiments.cfg"
 fi
