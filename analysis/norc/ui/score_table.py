@@ -203,7 +203,7 @@ class score_table(QTableWidget):
                 table.itemClicked.connect(self.handleCellActivated)
                 prevent_stretch_truncation(table, 10, 5)
                 w, h = table_dimensions(table, 10, 5)
-                self.setColumnWidth(ocol, w)
+                self.setColumnWidth(ocol, w + 2)
                 self.setRowHeight(orow, h)
 
                 self.setCellWidget(orow, ocol, table)

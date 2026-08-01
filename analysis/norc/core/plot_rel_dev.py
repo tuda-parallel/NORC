@@ -104,7 +104,7 @@ def setup_chart(ax, settings: plot_settings, p: util.measurement_info, y_label, 
 
     # Labels for ticks on the y-axis
     ax.set_yticks(np.arange(0, len(y_ticks), 1))
-    ax.set_yticklabels(y_ticks)
+    ax.set_yticklabels(y_ticks, family="monospace")
 
 
 def is_noiseless(noise_pattern: str):
