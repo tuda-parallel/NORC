@@ -13,7 +13,7 @@ import sys
 import zipfile
 
 from norc.helpers.util import data_selection, measurement_info, open_experiment_source
-from norc.core.score import compute_scores
+from norc.core.score import compute_scores, find_cutoff
 
 
 def parse_args(argv=None):
@@ -54,6 +54,13 @@ def parse_args(argv=None):
         type=int,
         default=0,
         help="Min visits for scoring (default: 0)"
+    )
+    counter_group.add_argument(
+        "--auto-cutoff",
+        action="store_true",
+        help="Ignore --top and instead select counters up to the cutoff "
+             "of the sorted resilience curve (still capped by --top and "
+             "filtered by --min-resilience)"
     )
 
     var_group = parser.add_argument_group("parameters")
@@ -256,16 +263,25 @@ def check_predefined_variables(template_vars, shell_vars):
     return template_vars & shell_vars
 
 
-def select_counters(sgp, top_n, min_resilience):
+def select_counters(sgp, top_n, min_resilience, use_cutoff=False):
     sorted_counters = sorted(
         sgp.scores.items(),
         key=lambda it: it[1].rel_resilience,
         reverse=True
     )
+
+    effective_top_n = top_n
+    if use_cutoff:
+        resiliences = [sc.rel_resilience for _, sc in sorted_counters]
+        cutoff_idx = find_cutoff(resiliences)
+        # Include everything up to and including the cutoff point, but never
+        # more than the user-specified --top cap.
+        effective_top_n = min(top_n, cutoff_idx + 1)
+
     selected = []
     for key, sc in sorted_counters:
         info = measurement_info.from_key(key)
-        if len(selected) < top_n and sc.rel_resilience >= min_resilience:
+        if len(selected) < effective_top_n and sc.rel_resilience >= min_resilience:
             selected.append((info.counter, sc))
     return selected
 
@@ -297,6 +313,11 @@ def substitute_template(template, combo):
     for var_name, var_value in combo.items():
         result = result.replace(f"@@{var_name}@@", var_value)
     return result
+
+
+def is_job_array(template):
+    """Check if the template submits itself as a SLURM job array."""
+    return bool(re.search(r'^\s*#SBATCH\s+--array', template, re.MULTILINE))
 
 
 def modify_sbatch_ntasks(template, ntasks_value):
@@ -427,7 +448,7 @@ def render_counter_comment(selected_counters):
     return "\n".join(lines)
 
 
-def render_execution_block(indent, is_sbatch, capture_logs):
+def render_execution_block(indent, is_sbatch, capture_logs, is_array=False):
     """Render the lines that submit/run one measurement and clean up its template copy.
 
     When capture_logs is set, redirects stdout+stderr into logs/. For sbatch,
@@ -435,15 +456,24 @@ def render_execution_block(indent, is_sbatch, capture_logs):
     any #SBATCH -o/-e directive in the template script itself; the sbatch
     submission command's own output (e.g. "Submitted batch job N") is
     captured separately since it isn't part of the job's output.
+
+    For job arrays, the per-task log uses SLURM's own %a placeholder (resolved
+    per array task at run time) so tasks don't overwrite each other's log; the
+    submission log itself (one "Submitted batch job N" line per sbatch call)
+    keeps the plain name.
     """
     lines = []
 
     if capture_logs:
         lines.append(f'{indent}LOG_FILE="logs/$(basename "$RESULT_DIR").log"')
+        if is_array:
+            lines.append(f'{indent}JOB_LOG_FILE="logs/$(basename "$RESULT_DIR")_%a.log"')
+        else:
+            lines.append(f'{indent}JOB_LOG_FILE="$LOG_FILE"')
 
     if is_sbatch:
         if capture_logs:
-            lines.append(f'{indent}sbatch --output="$LOG_FILE" --error="$LOG_FILE" "$TEMPLATE_FILE" > "$LOG_FILE.submit" 2>&1')
+            lines.append(f'{indent}sbatch --output="$JOB_LOG_FILE" --error="$JOB_LOG_FILE" "$TEMPLATE_FILE" > "$LOG_FILE.submit" 2>&1')
         else:
             lines.append(f'{indent}sbatch "$TEMPLATE_FILE"')
     else:
@@ -454,6 +484,23 @@ def render_execution_block(indent, is_sbatch, capture_logs):
 
     lines.append(f'{indent}[ $? -eq 0 ] && rm "$TEMPLATE_FILE"')
     return lines
+
+
+def render_array_dir_injection(indent):
+    """Render lines that make SCOREP_EXPERIMENT_DIRECTORY unique per array task.
+
+    A single sbatch submission of a #SBATCH --array template spawns many
+    tasks that all inherit the same SCOREP_EXPERIMENT_DIRECTORY exported by
+    the wrapper, so every task would write into the same result directory.
+    This appends an override line (right after the template's #SBATCH block,
+    since SLURM only recognizes directives that precede the first non-comment
+    line) that suffixes the wrapper-computed directory with the task's own
+    $SLURM_ARRAY_TASK_ID, resolved when each array task actually runs.
+    """
+    return [
+        f'{indent}LAST_SBATCH_LINE=$(grep -n "^#SBATCH" "$TEMPLATE_FILE" | tail -1 | cut -d: -f1)',
+        f'{indent}sed -i "${{LAST_SBATCH_LINE}}a export SCOREP_EXPERIMENT_DIRECTORY=\\"${{SCOREP_EXPERIMENT_DIRECTORY}}_\\${{SLURM_ARRAY_TASK_ID}}\\"" "$TEMPLATE_FILE"',
+    ]
 
 
 def render_orchestration_script(args, selected_counters, fallback_counter_sets, combinations, template, is_sbatch):
@@ -506,6 +553,7 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
     lines.append("")
 
     capture_logs = not args.no_log_capture
+    is_array = is_sbatch and is_job_array(template)
 
     # Build the nested loop structure
     if not combinations or not combinations[0]:
@@ -519,7 +567,9 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
         lines.append("        TEMPLATE_FILE=\"temp_templates/template_r${iter}.sh\"")
         lines.append("        cp \"$TEMPLATE_SCRIPT\" \"$TEMPLATE_FILE\"")
         lines.append("        chmod +x \"$TEMPLATE_FILE\"")
-        lines.extend(render_execution_block("        ", is_sbatch, capture_logs))
+        if is_array:
+            lines.extend(render_array_dir_injection("        "))
+        lines.extend(render_execution_block("        ", is_sbatch, capture_logs, is_array))
         lines.append("    done")
         lines.append("done")
     else:
@@ -537,7 +587,7 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
         indent += 1
 
         # Build Extra-P directory name
-        param_parts = [f"{name}=${{{name}}}" for name in var_names]
+        param_parts = [f"{name}${{{name}}}" for name in var_names]
         param_str = ".".join(param_parts)
         if args.prefix:
             result_dir = f"{args.prefix}.{param_str}.r${{rep}}"
@@ -546,7 +596,7 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
 
         lines.append("    " * indent + f"RESULT_DIR=\"result/{result_dir}\"")
         lines.append("    " * indent + "export SCOREP_METRIC_PAPI=\"${COUNTER_SET// /,}\"")
-        lines.append("    " * indent + "export SCOREP_EXPERIMENT_DIRECTORY=\"${RESULT_DIR}.tmp\"")
+        lines.append("    " * indent + "export SCOREP_EXPERIMENT_DIRECTORY=\"${RESULT_DIR}\"")
         lines.append("")
         lines.append("    " * indent + "TEMPLATE_FILE=\"temp_templates/template_${rep}_iter${iter}.sh\"")
         lines.append("    " * indent + "cp \"$TEMPLATE_SCRIPT\" \"$TEMPLATE_FILE\"")
@@ -558,8 +608,12 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
         for var_name in var_names:
             lines.append("    " * indent + f"sed -i \"s/@@{var_name}@@/${var_name}/g\" \"$TEMPLATE_FILE\"")
 
+        if is_array:
+            lines.append("")
+            lines.extend(render_array_dir_injection("    " * indent))
+
         lines.append("")
-        lines.extend(render_execution_block("    " * indent, is_sbatch, capture_logs))
+        lines.extend(render_execution_block("    " * indent, is_sbatch, capture_logs, is_array))
         lines.append("    " * indent + "rep=$((rep + 1))")
         lines.append("")
 
@@ -672,10 +726,16 @@ def main(argv=None):
         sys.exit(1)
 
     # Select counters
-    selected_counters = select_counters(sgp, args.top, args.min_resilience)
+    selected_counters = select_counters(
+        sgp, args.top, args.min_resilience, use_cutoff=args.auto_cutoff
+    )
     if not selected_counters:
+        selection_desc = (
+            f"--auto-cutoff (capped at --top {args.top})" if args.auto_cutoff
+            else f"--top {args.top}"
+        )
         print(
-            f"Error: no counters selected with --top {args.top} and "
+            f"Error: no counters selected with {selection_desc} and "
             f"--min-resilience {args.min_resilience}",
             file=sys.stderr
         )
@@ -719,7 +779,7 @@ def main(argv=None):
 
     # Write the output script
     try:
-        with open(args.output, "w") as f:
+        with open(args.output, "w", newline='\n') as f:
             f.write(script_content)
         os.chmod(args.output, 0o755)
     except Exception as e:
@@ -730,6 +790,8 @@ def main(argv=None):
     print(f"Generated orchestration script: {args.output}")
     print(f"Template: {args.template_script} ({'sbatch' if is_sbatch else 'shell'})")
     print(f"Template variables found: {sorted(template_vars) if template_vars else 'none'}")
+    if args.auto_cutoff:
+        print(f"Counter selection: cutoff detection (capped at --top {args.top})")
     print(f"Selected {len(selected_counters)} counter(s): {', '.join(c for c, _ in selected_counters)}")
     print(f"Parameter combinations: {len(combinations)}")
     max_runs = len(combinations) * len(selected_counters) * args.iterations

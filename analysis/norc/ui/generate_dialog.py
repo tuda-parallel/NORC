@@ -62,7 +62,15 @@ class generate_dialog(QDialog):
         self.sb_top = QSpinBox()
         self.sb_top.setRange(1, 999)
         self.sb_top.setValue(10)
-        form.addRow("Top N counters:", self.sb_top)
+        form.addRow("Top N counters (cap):", self.sb_top)
+
+        self.cb_auto_cutoff = QCheckBox("Auto-select via cutoff detection")
+        self.cb_auto_cutoff.setToolTip(
+            "Select counters up to the cutoff of the sorted resilience "
+            "curve instead of a fixed count. Still capped by 'Top N' and "
+            "filtered by 'Min resilience'."
+        )
+        form.addRow(self.cb_auto_cutoff)
 
         self.sb_min_resilience = QDoubleSpinBox()
         self.sb_min_resilience.setRange(0.0, 1.0)
@@ -168,6 +176,8 @@ class generate_dialog(QDialog):
         argv = [experiment_root, template_script]
 
         argv += ["--top", str(self.sb_top.value())]
+        if self.cb_auto_cutoff.isChecked():
+            argv.append("--auto-cutoff")
         argv += ["--min-resilience", str(self.sb_min_resilience.value())]
         argv += ["--contribution", str(self.sb_contribution.value())]
         argv += ["--visits", str(self.sb_visits.value())]

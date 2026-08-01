@@ -16,6 +16,7 @@ import matplotlib
 from norc.helpers.util import experiment_filter, available_measurements, open_experiment_source
 from norc.ui.examine_tab import examine_tab
 from norc.ui.ratings_tab import ratings_tab
+from norc.ui.ranking_tab import ranking_tab
 from norc.ui.generate_dialog import generate_dialog
 from norc.core.analyze import analyze_experiment
 from norc.ui.ui_util import add_v_spacer, clear_widget
@@ -28,6 +29,7 @@ class main_window(QMainWindow):
         self.ui = appstate.load_ui("mainwindow.ui")
         self.ui.tw_modes.addTab(ratings_tab(appstate), "Ratings")
         self.ui.tw_modes.addTab(examine_tab(appstate), "Examine")
+        self.ui.tw_modes.addTab(ranking_tab(appstate), "Ranking")
 
         self.filter_boxes = {"benchmark": [], "system": [], "noise": [], "counter": []}
         self._filtering_in_progress = False
@@ -74,18 +76,27 @@ class main_window(QMainWindow):
         self.ui.show()
 
     def update_config(self):
-        self.appstate.plt_mgr.set_plotmode(self.ui.cb_plotmode.currentText())
-        self.appstate.plt_mgr.set_colorbands(self.ui.sb_colorbands.value())
-        self.appstate.plt_mgr.set_contribution_threshold(self.ui.sb_thr_contrib.value())
-        self.appstate.plt_mgr.set_visit_threshold(self.ui.sb_thr_visits.value())
+        # Each set_* below can independently emit plt_mgr.reconfigured, which
+        # would otherwise re-run every reconfigured slot (e.g. score_tab's
+        # compute_scores) once per setter instead of once for the whole batch.
+        # Block those emits and fire a single one after all settings landed.
+        self.appstate.plt_mgr.blockSignals(True)
+        try:
+            self.appstate.plt_mgr.set_plotmode(self.ui.cb_plotmode.currentText())
+            self.appstate.plt_mgr.set_colorbands(self.ui.sb_colorbands.value())
+            self.appstate.plt_mgr.set_contribution_threshold(self.ui.sb_thr_contrib.value())
+            self.appstate.plt_mgr.set_visit_threshold(self.ui.sb_thr_visits.value())
 
-        self.appstate.plt_mgr.set_parameter_groupings(
-            benchmark=self.ui.cb_lump_benchmark.checkState() == Qt.Checked,
-            system=self.ui.cb_lump_system.checkState() == Qt.Checked,
-            resources=self.ui.cb_lump_resources.checkState() == Qt.Checked,
-            params=self.ui.cb_lump_params.checkState() == Qt.Checked,
-            noise=self.ui.cb_lump_noise.checkState() == Qt.Checked,
-        )
+            self.appstate.plt_mgr.set_parameter_groupings(
+                benchmark=self.ui.cb_lump_benchmark.checkState() == Qt.Checked,
+                system=self.ui.cb_lump_system.checkState() == Qt.Checked,
+                resources=self.ui.cb_lump_resources.checkState() == Qt.Checked,
+                params=self.ui.cb_lump_params.checkState() == Qt.Checked,
+                noise=self.ui.cb_lump_noise.checkState() == Qt.Checked,
+            )
+        finally:
+            self.appstate.plt_mgr.blockSignals(False)
+        self.appstate.plt_mgr.reconfigured.emit()
 
     def open_experiment_folder_dialog(self):
         dialog = QFileDialog(self.ui)

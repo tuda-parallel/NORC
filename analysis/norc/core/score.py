@@ -189,10 +189,10 @@ def _moving_average(ys, window):
 
 
 def smooth_curve(values, window=1):
-    """Moving-average smooth `values`, e.g. for plotting alongside `find_knee`.
+    """Moving-average smooth `values`, e.g. for plotting alongside `find_cutoff`.
 
     Non-finite entries (`np.inf`) are left untouched and excluded from the
-    averaging of their neighbors, matching how `find_knee` treats them.
+    averaging of their neighbors, matching how `find_cutoff` treats them.
     """
     values = np.asarray(values, dtype=float)
     finite_idx = [i for i, v in enumerate(values) if np.isfinite(v)]
@@ -202,10 +202,10 @@ def smooth_curve(values, window=1):
     return result
 
 
-def find_knee(values, smoothing_window=1):
-    """Find the index of the knee/elbow in a sequence of scores.
+def find_cutoff(values, smoothing_window=1):
+    """Find the index of the cutoff (knee/elbow) in a sequence of scores.
 
-    Uses the maximum-distance-to-chord method: the knee is the point that
+    Uses the maximum-distance-to-chord method: the cutoff is the point that
     sits furthest above the straight line connecting the first and last
     point, after both axes have been normalized to [0, 1]. This is a
     simple, dependency-free approximation of the Kneedle algorithm (Satopaa
@@ -220,7 +220,7 @@ def find_knee(values, smoothing_window=1):
         values: Sequence of floats, assumed sorted in descending order
             (e.g., `rel_resilience` scores ordered best-to-worst).
             Non-finite entries (`np.inf`, from missing data) are ignored
-            when locating the knee, but do not shift the indices of the
+            when locating the cutoff, but do not shift the indices of the
             remaining values.
         smoothing_window: Size of the moving-average window applied to
             `values` before looking for bends. Keeps small local wiggles
@@ -228,9 +228,9 @@ def find_knee(values, smoothing_window=1):
             1 to disable.
 
     Returns:
-        Index (0-based, into the original `values`) of the knee point.
+        Index (0-based, into the original `values`) of the cutoff point.
         Everything at or before this index is considered "before the
-        elbow"; this index itself should typically be included in a
+        cutoff"; this index itself should typically be included in a
         selection. Returns `len(values) - 1` if fewer than 3 finite values
         are available (nothing to bend), or if all finite values coincide.
     """
@@ -261,7 +261,7 @@ def find_knee(values, smoothing_window=1):
     # Signed distance to the chord: positive means the point sits above the
     # chord, which for a decreasing curve is the classic "elbow" bulge (lots
     # of good items, then a fast drop). S-shaped curves also bulge below the
-    # chord on their second bend; that's a real inflection but not the knee
+    # chord on their second bend; that's a real inflection but not the cutoff
     # we want, so it's only used as a fallback for curves that never rise
     # above the chord at all (fully convex, no plateau to speak of).
     cross = (dx * (y_norm - y0) - dy * (x_norm - x0)) / chord_len
@@ -272,33 +272,33 @@ def find_knee(values, smoothing_window=1):
     return finite_idx[best]
 
 
-def _test_find_knee():
+def _test_find_cutoff():
     # Plain concave elbow: the only bulge is above the chord.
-    assert find_knee([1.0, 0.9, 0.6, 0.2, 0.1, 0.0]) == 1
+    assert find_cutoff([1.0, 0.9, 0.6, 0.2, 0.1, 0.0]) == 1
 
     # S-curve: flat, steep drop, flat again, steep drop again. That second
     # drop bulges *below* the chord - a real inflection, but not the elbow
     # we want, since it's a plateau-to-plateau step, not "before this most
     # items are still fine". Restricting to the above-chord side picks the
-    # first (and only) genuine knee instead.
+    # first (and only) genuine cutoff instead.
     s_curve = [1.0, 0.98, 0.95, 0.6, 0.3, 0.28, 0.27, 0.1, 0.02, 0.0]
-    assert find_knee(s_curve) == 1
+    assert find_cutoff(s_curve) == 1
 
     # Noisy decreasing curve with a tiny single-point downdraw early on and
     # the real cliff much further along. The downdraw bulges below the
     # chord, so it's excluded on its own merits; smoothing still nudges the
     # exact index picked on the (above-chord) plateau leading into the drop.
     noisy = [1.0, 0.99, 0.98, 0.99, 0.85, 0.99, 0.98, 0.97, 0.96, 0.5, 0.2, 0.0]
-    assert find_knee(noisy, smoothing_window=1) == 8
-    assert find_knee(noisy) == 7
+    assert find_cutoff(noisy, smoothing_window=1) == 8
+    assert find_cutoff(noisy) == 7
 
 
 def plot_resilience_curve(ax, sorted_counters):
-    """Draw the resilience-ranking-with-knee plot onto `ax`.
+    """Draw the resilience-ranking-with-cutoff plot onto `ax`.
 
     `sorted_counters` is a list of (key, score) pairs, best-to-worst by
     `rel_resilience` (as produced by `sorted(scores.items(), key=lambda it:
-    it[1].rel_resilience, reverse=True)`). Shared by the Score tab in the
+    it[1].rel_resilience, reverse=True)`). Shared by the Ranking tab in the
     GUI and `norc_score --plot` so both show the exact same thing.
     """
     counter_names = [measurement_info.from_key(key).counter for key, _ in sorted_counters]
@@ -310,15 +310,15 @@ def plot_resilience_curve(ax, sorted_counters):
     ax.plot(ranks[finite], resiliences[finite], marker="o", markersize=3)
 
     if finite.sum() >= 3:
-        knee_idx = find_knee(list(resiliences))
+        cutoff_idx = find_cutoff(list(resiliences))
         finite_ranks = ranks[finite]
         finite_resiliences = resiliences[finite]
 
-        # Same smoothing find_knee applies before looking for bends - shown
-        # so it's clear why the knee doesn't sit on a raw wiggle.
+        # Same smoothing find_cutoff applies before looking for bends - shown
+        # so it's clear why the cutoff doesn't sit on a raw wiggle.
         # smoothed = smooth_curve(resiliences)
         # ax.plot(finite_ranks, smoothed[finite], linestyle="-", linewidth=1, label="smoothed")
-        # Same chord find_knee measures distance-to-selection against: the
+        # Same chord find_cutoff measures distance-to-selection against: the
         # straight line from the first to the last finite point.
         # ax.plot(
         #     [finite_ranks[0], finite_ranks[-1]],
@@ -328,22 +328,22 @@ def plot_resilience_curve(ax, sorted_counters):
         #     linewidth=1,
         #     label="selection reference line",
         # )
-        if np.isfinite(resiliences[knee_idx]):
-            ax.axvline(ranks[knee_idx], color="red", linestyle="--", linewidth=1)
-            ax.axhline(resiliences[knee_idx], color="red", linestyle="--", linewidth=1)
+        if np.isfinite(resiliences[cutoff_idx]):
+            ax.axvline(ranks[cutoff_idx], color="red", linestyle="--", linewidth=1)
+            ax.axhline(resiliences[cutoff_idx], color="red", linestyle="--", linewidth=1)
             ax.annotate(
-                f"{resiliences[knee_idx]:.2f}",
-                (ranks[-1], resiliences[knee_idx]),
+                f"{resiliences[cutoff_idx]:.2f}",
+                (ranks[-1], resiliences[cutoff_idx]),
                 textcoords="offset points",
                 xytext=(4, 2),
                 ha="left",
                 fontsize="small",
                 color="red",
             )
-            ax.plot(ranks[knee_idx], resiliences[knee_idx], "ro")
+            ax.plot(ranks[cutoff_idx], resiliences[cutoff_idx], "ro")
             ax.annotate(
-                "knee",
-                (ranks[knee_idx], resiliences[knee_idx]),
+                "cutoff",
+                (ranks[cutoff_idx], resiliences[cutoff_idx]),
                 textcoords="offset points",
                 xytext=(6, 6),
                 color="red",
@@ -372,12 +372,12 @@ def print_cli_formatted(scores, selection):
     print("Top Counters for constraints:")
 
     sorted_items = sorted(scores.items(), key=lambda it: it[1].rel_resilience, reverse=True)
-    knee_idx = find_knee([sc.rel_resilience for _, sc in sorted_items])
+    cutoff_idx = find_cutoff([sc.rel_resilience for _, sc in sorted_items])
 
     place = 1
     for i, (key, sc) in enumerate(sorted_items):
         info = measurement_info.from_key(key)
-        marker = "  <-- knee" if i == knee_idx else ""
+        marker = "  <-- cutoff" if i == cutoff_idx else ""
         print(
             f"{place}.\t{info.counter}\tResilience: {sc.rel_resilience:.4f}\tDeviation: {sc.deviation():.4f}%\tSuscept.: {sc.susceptibility:.4f}{marker}"
         )
@@ -493,7 +493,7 @@ def main() -> None:
         const="-",
         default=None,
         metavar="FILE",
-        help="Show the resilience/knee plot (same as the GUI's Score tab). "
+        help="Show the resilience/cutoff plot (same as the GUI's Ranking tab). "
              "With a FILE argument, save it there instead of opening a window.",
     )
 
