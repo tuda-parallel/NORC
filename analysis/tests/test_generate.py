@@ -23,6 +23,7 @@ from norc.core.generate import (
     extract_used_variables,
     extract_variables,
     group_counters_via_metrics_cfg,
+    is_job_array,
     is_sbatch_script,
     parse_metrics_cfg,
     select_counters,
@@ -450,6 +451,55 @@ class TestNorcGenerateIntegration(unittest.TestCase):
         """Verify that submit_job.sh is detected as sbatch."""
         self.assertTrue(is_sbatch_script(str(self.template_script)))
 
+    def test_is_job_array_detects_array_directive(self):
+        """Verify #SBATCH --array is recognized as a job array template."""
+        self.assertTrue(is_job_array("#!/bin/bash\n#SBATCH --array=0-9\n"))
+        self.assertFalse(is_job_array("#!/bin/bash\n#SBATCH -n 4\n"))
+
+    def test_generate_array_template_scopes_result_dir_per_task(self):
+        """Job-array templates get a per-task override for SCOREP_EXPERIMENT_DIRECTORY.
+
+        Without this, every array task inherits the same directory from the
+        wrapper and results collide/overwrite each other.
+        """
+        from norc.core.generate import main
+
+        array_template = self.test_dir / "array_template.sh"
+        with open(array_template, 'w') as f:
+            f.write(
+                "#!/bin/bash\n"
+                "#SBATCH -n 4\n"
+                "#SBATCH --array=0-3\n"
+                "srun ./prog --steps 100\n"
+            )
+
+        output_script = self.test_dir / "measure_array.sh"
+        argv = [
+            str(self.exp_root),
+            str(array_template),
+            "-o", str(output_script),
+            "--top", "1",
+            "--min-resilience", "0",
+        ]
+
+        try:
+            main(argv)
+        except SystemExit as e:
+            if e.code != 0:
+                self.fail(f"norc_generate failed with exit code {e.code}")
+
+        with open(output_script, 'r') as f:
+            content = f.read()
+
+        self.assertIn("LAST_SBATCH_LINE=", content)
+        self.assertIn(
+            'sed -i "${LAST_SBATCH_LINE}a export SCOREP_EXPERIMENT_DIRECTORY='
+            '\\"${SCOREP_EXPERIMENT_DIRECTORY}_\\${SLURM_ARRAY_TASK_ID}\\"" "$TEMPLATE_FILE"',
+            content
+        )
+        self.assertIn('JOB_LOG_FILE="logs/$(basename "$RESULT_DIR")_%a.log"', content)
+        self.assertIn('sbatch --output="$JOB_LOG_FILE" --error="$JOB_LOG_FILE"', content)
+
     def test_template_variables(self):
         """Verify submit_job.sh contains expected variables."""
         with open(self.template_script, 'r') as f:
@@ -632,7 +682,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
         with open(output_script, 'r') as f:
             content = f.read()
 
-        self.assertIn("myapp.n=", content, "Prefix not in result directory")
+        self.assertIn("myapp.n${n}", content, "Prefix not in result directory")
 
     def test_counter_grouping_in_output(self):
         """Verify the generated script groups counters via find_non_overlapping_sets."""
@@ -751,7 +801,7 @@ class TestNorcGenerateIntegration(unittest.TestCase):
             content = f.read()
 
         self.assertIn(
-            'sbatch --output="$LOG_FILE" --error="$LOG_FILE" "$TEMPLATE_FILE" > "$LOG_FILE.submit" 2>&1',
+            'sbatch --output="$JOB_LOG_FILE" --error="$JOB_LOG_FILE" "$TEMPLATE_FILE" > "$LOG_FILE.submit" 2>&1',
             content
         )
 
