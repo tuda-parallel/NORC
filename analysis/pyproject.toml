@@ -66,6 +66,7 @@ norc_plot = "norc.core.plot_rel_dev:main"
 norc_rank = "norc.core.score:main"
 norc_generate = "norc.core.generate:main"
 norc_calc_time = "norc.core.calc_time:main"
+norc_redundancy = "norc.core.redundancy:main"
 
 
 [project.optional-dependencies]
