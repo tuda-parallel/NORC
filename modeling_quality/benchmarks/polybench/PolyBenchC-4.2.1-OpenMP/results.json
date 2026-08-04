@@ -1,0 +1,1 @@
+[{"benchmark": "2mm", "category": "linear-algebra/kernels", "mode": "time", "multiplier": 1, "dims": "{}", "status": "OK", "wall_clock_seconds": 0.1, "reported_seconds": 0.05}, {"benchmark": "2mm", "category": "linear-algebra/kernels", "mode": "time", "multiplier": 2, "dims": "{}", "status": "OK", "wall_clock_seconds": 0.2, "reported_seconds": 0.1}]

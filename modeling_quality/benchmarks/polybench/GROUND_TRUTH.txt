@@ -1,0 +1,30 @@
+2mm 5*n^3 + n^2
+3mm 6*n^3
+adi 3000*n^2
+atax 4*n^2
+bicg 4*n^2
+cholesky (1/3)*n^3 + (1/2)*n^2 + (1/6)*n
+correlation n^3 + 8*n^2 + 3*n
+covariance n^3 + 4*n^2 + 2*n
+deriche 32*n^2
+doitgen 2*n^4 + n^3 + n^2 + n
+durbin 2*n^2 + 3*n - 5
+fdtd-2d 1100*n^2
+floyd-warshall 2*n^3
+gemm 3*n^3 + n^2
+gemver 10*n^2 + n
+gesummv 4*n^2 + 3*n
+gramschmidt 2*n^3 + n^2 + n
+heat-3d 3000*n^3
+jacobi-1d 600*n
+jacobi-2d 1000*n^2
+lu (4/3)*n^3 - (3/2)*n^2 + (1/6)*n
+ludcmp (4/3)*n^3 + (1/2)*n^2 - (5/6)*n
+mvt 4*n^2
+nussinov (1/6)*n^3 - (1/2)*n^2 + (1/3)*n
+seidel-2d 900*n^2
+symm (5/2)*n^3 + (5/2)*n^2
+syr2k 3*n^3 + (7/2)*n^2 + (1/2)*n
+syrk (3/2)*n^3 + 2*n^2 + (1/2)*n
+trisolv n^2 + 2*n
+trmm n^3
