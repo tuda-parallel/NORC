@@ -331,31 +331,36 @@ def plot_resilience_curve(ax, sorted_counters):
         if np.isfinite(resiliences[cutoff_idx]):
             ax.axvline(ranks[cutoff_idx], color="red", linestyle="--", linewidth=1)
             ax.axhline(resiliences[cutoff_idx], color="red", linestyle="--", linewidth=1)
-            ax.annotate(
-                f"{resiliences[cutoff_idx]:.2f}",
-                (ranks[-1], resiliences[cutoff_idx]),
-                textcoords="offset points",
-                xytext=(4, 2),
-                ha="left",
-                fontsize="small",
-                color="red",
-            )
+            # ax.annotate(
+            #     f"{resiliences[cutoff_idx]:.2f}",
+            #     (ranks[-1], resiliences[cutoff_idx]),
+            #     textcoords="offset points",
+            #     xytext=(4, 2),
+            #     ha="left",
+            #     fontsize=9,
+            #     color="red",
+            # )
             ax.plot(ranks[cutoff_idx], resiliences[cutoff_idx], "ro")
             ax.annotate(
-                "cutoff",
+                f"cutoff {resiliences[cutoff_idx]:.2f}",
                 (ranks[cutoff_idx], resiliences[cutoff_idx]),
                 textcoords="offset points",
-                xytext=(6, 6),
+                xytext=(-3, -3),
+                ha="right",
+                va="top",
+                fontsize=7,
                 color="red",
             )
         # ax.legend(loc="best", fontsize="small")
 
     ax.set_xticks(ranks)
-    ax.set_xticklabels(counter_names, fontsize="small", rotation=90, family="monospace")
+    ax.set_xticklabels(counter_names, fontsize=6, rotation=90, family="monospace", usetex=False)
     ax.set_ylim(0, 1)
-    ax.set_xlabel("Counter")
-    ax.set_ylabel("Resilience score")
-    ax.set_title("Counters ranked by resilience")
+    ax.margins(x=0)
+    ax.tick_params(axis='y', labelsize=7)
+    #ax.set_xlabel("Counter", fontsize=8)
+    ax.set_ylabel("Resilience score", fontsize=7)
+    # ax.set_title("Counters ranked by resilience", fontsize=9)
 
 
 def print_cli_formatted(scores, selection):
@@ -405,6 +410,54 @@ def print_tabular(scores, selection):
     print("  \\hline\\end{tabular}")
     print(f"  \\caption{{min. contribution: {selection.contrib_threshold}%, min. visits: {selection.visit_threshold}}}")
     print("\\end{table}")
+
+
+def _ranked_items(experiment_root, contrib_threshold=1, visit_threshold=100):
+    """Score every counter and return (sorted_items, cutoff_idx), shared by
+    `counters_above_cutoff` and `ranked_counters_above_cutoff`."""
+    selection = data_selection()
+    selection.lump_benchmarks = True
+    selection.lump_noise = True
+    selection.lump_params = True
+    selection.lump_resources = True
+    selection.lump_systems = True
+    selection.contrib_threshold = contrib_threshold
+    selection.visit_threshold = visit_threshold
+
+    sgp = compute_scores(experiment_root, selection)
+    sorted_items = sorted(sgp.scores.items(), key=lambda it: it[1].rel_resilience, reverse=True)
+    cutoff_idx = find_cutoff([sc.rel_resilience for _, sc in sorted_items])
+    return sorted_items, cutoff_idx
+
+
+def counters_above_cutoff(experiment_root, contrib_threshold=1, visit_threshold=100, min_resilience=None):
+    """Return the set of counter names at or above the resilience cutoff.
+
+    If `min_resilience` is given, a counter is included when it clears
+    *either* criterion: at/above the cutoff, or `rel_resilience >= min_resilience`
+    (independent criteria, not both required)."""
+    sorted_items, cutoff_idx = _ranked_items(experiment_root, contrib_threshold, visit_threshold)
+    return {
+        measurement_info.from_key(key).counter
+        for i, (key, sc) in enumerate(sorted_items)
+        if i <= cutoff_idx or (min_resilience is not None and sc.rel_resilience >= min_resilience)
+    }
+
+
+def ranked_counters_above_cutoff(experiment_root, contrib_threshold=1, visit_threshold=100, min_resilience=None):
+    """Same selection as `counters_above_cutoff`, but as a list of counter names
+    ordered best-to-worst by `rel_resilience` (ties broken by first occurrence),
+    for use as the priority order in `select_counters`."""
+    sorted_items, cutoff_idx = _ranked_items(experiment_root, contrib_threshold, visit_threshold)
+    names = []
+    seen = set()
+    for i, (key, sc) in enumerate(sorted_items):
+        if i <= cutoff_idx or (min_resilience is not None and sc.rel_resilience >= min_resilience):
+            name = measurement_info.from_key(key).counter
+            if name not in seen:
+                seen.add(name)
+                names.append(name)
+    return names
 
 
 class ScoreComputationCancelled(Exception):
@@ -519,13 +572,15 @@ def main() -> None:
         import matplotlib.pyplot as plt
 
         sorted_counters = sorted(sgp.scores.items(), key=lambda it: it[1].rel_resilience, reverse=True)
-        fig, ax = plt.subplots(figsize=(6, 4), layout="constrained")
+        # IEEE line:8.8578
+        # IEEE text:18.1374
+        fig, ax = plt.subplots(figsize=(8.8578, 4,'cm'), layout="constrained")
         plot_resilience_curve(ax, sorted_counters)
 
         if args.plot == "-":
             plt.show()
         else:
-            fig.savefig(args.plot)
+            fig.savefig(args.plot, bbox_inches='tight', pad_inches=0)
 
 
 if __name__ == "__main__":
