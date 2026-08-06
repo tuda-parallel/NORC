@@ -11,12 +11,12 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy
-from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from scipy.spatial.distance import pdist, squareform
-from sklearn.preprocessing import StandardScaler
-
+import numpy as np
 from extrap.fileio.file_reader.json_file_reader import JsonFileReader
 from extrap.modelers.model_generator import ModelGenerator
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from scipy.spatial.distance import pdist
+from sklearn.preprocessing import StandardScaler
 
 try:
     from norc.core.redundancy import find_redundant_pairs, is_cache_counter
@@ -170,23 +170,69 @@ def plot_by_metric(deviations_by_metric, out_path, plot_style="violin"):
     print(f"wrote {out_path}")
 
 
-def plot_heatmap(deviations, kernels, metrics, out_path, clamp=3.0):
+def plot_heatmap(deviations, kernels, metrics, out_path, deviations_by_metric, clamp=3.0):
     grid = [
         [numpy.clip(deviations.get((kernel, metric), float("nan")), -clamp, clamp) for kernel in kernels]
         for metric in metrics
     ]
-
-    fig, ax = plt.subplots(figsize=(0.35 * len(kernels) + 2, 0.28 * len(metrics) + 1))
+    # , (ax3, ax4)
+    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(8.8578, 0.28 * len(metrics) + 3, 'cm'),
+                                  gridspec_kw={'width_ratios': (0.75, 0.25), 'wspace': 0},
+                                  layout='constrained', sharey=True)
     bound = max(abs(v) for row in grid for v in row if v == v)  # skip NaN
     im = ax.imshow(grid, cmap="RdBu_r", vmin=-bound, vmax=bound, aspect="auto")
     ax.set_xticks(range(len(kernels)), labels=kernels, rotation=90, fontsize=6)
-    ax.set_yticks(range(len(metrics)), labels=metrics, fontsize=7)
-    fig.colorbar(
-        im, ax=ax, label="leading-exponent deviation (modeled - expected)", shrink=0.8
+    ax.set_yticks(range(len(metrics)), labels=[m.replace('PAPI_', '') for m in metrics], fontsize=6,
+                  fontfamily="monospace")
+    cbar = fig.colorbar(
+        im, ax=ax, label="lead-exponent deviation (modeled - expected)",
+        orientation='horizontal', pad=0.01
     )
-    ax.set_title("Extra-P leading-exponent deviation by kernel x metric")
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150)
+    cbar.set_label("Lead-exponent deviation (modeled - expected)", fontsize=7)
+    cbar.ax.tick_params(labelsize=6)
+
+    order = sorted(
+        deviations_by_metric,
+        key=lambda m: numpy.mean([abs(d) for d in deviations_by_metric[m]]),
+    )
+    data = [numpy.abs(deviations_by_metric[m]) for m in order]
+
+    ax2.violinplot(data, positions=np.arange(0, len(data)), orientation='horizontal', showmeans=True, showextrema=True,
+                   widths=0.8)
+    # ax2.margins(y=0.002, x=0)
+    ax2.tick_params(labelsize=6)
+    ax2.yaxis.set_visible(False)
+    # ax2.boxplot(
+    #     data,
+    #     orientation="horizontal",
+    #     showmeans=True,
+    #     tick_labels=None,
+    #     showfliers=True,
+    #     boxprops=dict(color="#2b6cb0"),
+    #     medianprops=dict(color="#c05621"),
+    #     whiskerprops=dict(color="#2b6cb0"),
+    #     capprops=dict(color="#2b6cb0"),
+    #     flierprops=dict(markeredgecolor="#2b6cb0", markersize=3),
+    # )
+    # ax2.set_yticks([])
+    ax2.set_xlabel("Absolute\nlead-exponent\ndeviation", fontsize=7)
+
+
+    fig.get_layout_engine().set(w_pad=0, wspace=0)
+
+    # Find cutoff at 0.5 MAD threshold
+    cutoff_idx = next((i for i, d in enumerate(data) if np.mean(np.abs(d)) > 0.5), None)
+
+    # Add cutoff line if detected
+    if cutoff_idx is not None:
+        ax2.axhline(cutoff_idx - 0.5, color="red", linestyle=":", linewidth=1, zorder=3,
+                    label=f"0.5 cutoff")
+        ax.axhline(cutoff_idx - 0.5, color="red", linestyle=":", linewidth=1, zorder=3)
+        ax2.axvline(0.5, color="red", linestyle=":", linewidth=1, zorder=3)
+        fig.legend(loc="lower right", fontsize=6, bbox_to_anchor=(1.0, 0.055))
+
+    # ax.set_title("Extra-P leading-exponent deviation by kernel x metric")
+    fig.savefig(out_path, bbox_inches='tight', pad_inches=0.01)
     print(f"wrote {out_path}")
 
 
@@ -305,6 +351,179 @@ def cluster_metrics_by_deviation(deviations_by_metric, kernels, out_path, n_clus
 
     # Hierarchical clustering
     distances = pdist(matrix_norm, metric="euclidean")
+    Z = linkage(distances, method="ward")
+
+    # Cluster assignment
+    if n_clusters is not None:
+        # Pick the distance threshold that cuts the tree into exactly n_clusters
+        # groups, so scipy's dendrogram coloring (which also cuts by distance)
+        # matches these clusters one-for-one.
+        heights = numpy.sort(Z[:, 2])
+        n_merges = len(heights)
+        k = min(max(n_clusters, 1), n_merges + 1)
+        if k >= n_merges + 1:
+            color_threshold = 0.0
+        elif k <= 1:
+            color_threshold = heights[-1] * 1.01
+        else:
+            color_threshold = (heights[n_merges - k] + heights[n_merges - k + 1]) / 2
+        clusters = fcluster(Z, t=color_threshold, criterion="distance")
+    else:
+        # Auto-detect using distance threshold
+        clusters = fcluster(Z, t=max(Z[:, 2]) * 0.5, criterion="distance")
+        color_threshold = max(Z[:, 2]) * 0.5
+    metric_to_mad = {m: numpy.mean(numpy.abs(deviations_by_metric[m])) for m in metrics}
+
+    # Find best (lowest MAD) metric in each cluster
+    cluster_reps = {}
+    for cluster_id in numpy.unique(clusters):
+        cluster_metrics = [metrics[i] for i, c in enumerate(clusters) if c == cluster_id]
+        best = min(cluster_metrics, key=lambda m: metric_to_mad[m])
+        cluster_reps[cluster_id] = best
+
+    # Plot dendrogram with heatmap of clustered data
+    fig, (ax) = plt.subplots(1, 1, figsize=(8.8578, 6, 'cm'),
+                             # gridspec_kw={'height_ratios': (1, 1), 'hspace': 0},
+                             layout='constrained')
+    dendro_kwargs = {"Z": Z, "labels": [m.replace('PAPI_', '') for m in metrics], "ax": ax, "leaf_font_size": 6,
+                     "leaf_rotation": 90}
+    if color_threshold is not None:
+        dendro_kwargs["color_threshold"] = color_threshold
+    dendro = dendrogram(**dendro_kwargs)
+    for label in ax.get_yticklabels():
+        label.set_fontfamily('monospace')
+
+    # Build rotated heatmap in dendrogram's leaf order (rows=kernels, cols=metrics)
+    reordered_metrics = [m for m in metrics if m.replace('PAPI_', '') in dendro["ivl"]]
+    reordered_metrics.sort(key=lambda m: list(dendro["ivl"]).index(m.replace('PAPI_', '')))
+    heat_grid = numpy.array([[deviations_by_metric[m][kernels.index(k)] if k in kernels else numpy.nan
+                              for m in reordered_metrics] for k in kernels])
+    bound = numpy.nanmax(numpy.abs(heat_grid))
+    # im = ax_heat.imshow(heat_grid, cmap="RdBu_r", vmin=-bound, vmax=bound, aspect="auto")
+    # ax_heat.set_xticks(range(len(reordered_metrics)), labels=[m.replace('PAPI_', '') for m in reordered_metrics],
+    #                    rotation=90, fontsize=5, fontfamily="monospace")
+    # ax_heat.set_yticks(range(len(kernels)), labels=kernels, fontsize=5)
+    # ax_heat.set_ylabel("Kernel", fontsize=7)
+    # fig.colorbar(im, ax=ax_heat, label="Deviation", orientation='horizontal', pad=0.1, aspect=30)
+
+    # Build parent map: each leaf and internal node points to its parent merge
+    parent = {}
+    for row in range(len(Z)):
+        a, b = int(Z[row, 0]), int(Z[row, 1])
+        parent[a] = len(metrics) + row
+        parent[b] = len(metrics) + row
+
+    # Annotate every junction with lowest-MAD metric in subtree, using headroom to decide placement
+    display_index = {label: i for i, label in enumerate(dendro["ivl"])}
+
+    fontsize = 6
+    # Calculate character width in x-axis data units from font metrics
+    fig_dpi = fig.dpi
+    x_range = ax.get_xlim()[1] - ax.get_xlim()[0]
+    points_to_x_data = (fontsize / 72) * fig_dpi / ax.get_window_extent(fig.canvas.get_renderer()).width * x_range
+    char_width_x = points_to_x_data
+
+    # Collect merge x-positions (dendrogram internal lines, not leaves)
+    merge_positions = []
+    temp_cluster_x = {i: 5 + 10 * display_index[metrics[i].replace('PAPI_', '')] for i in range(len(metrics))}
+    for row_idx, (a, b, dist, _count) in enumerate(Z):
+        a, b = int(a), int(b)
+        merged_id = len(metrics) + row_idx
+        x = (temp_cluster_x[a] + temp_cluster_x[b]) / 2
+        temp_cluster_x[merged_id] = x
+        merge_positions.append(x)
+
+    # Reset for actual annotation pass
+    cluster_x = {i: 5 + 10 * display_index[metrics[i].replace('PAPI_', '')] for i in range(len(metrics))}
+    cluster_leaves = {i: {i} for i in range(len(metrics))}
+
+    for row_idx, (a, b, dist, _count) in enumerate(Z):
+        a, b = int(a), int(b)
+        merged_id = len(metrics) + row_idx
+        x = merge_positions[row_idx]
+        leaves = cluster_leaves[a] | cluster_leaves[b]
+        cluster_x[merged_id] = x
+        cluster_leaves[merged_id] = leaves
+
+        rep = min((metrics[i] for i in leaves), key=lambda m: metric_to_mad[m]).replace('PAPI_', '')
+
+        # Calculate vertical headroom: distance to parent merge (infinite if at root)
+        if merged_id in parent:
+            parent_idx = parent[merged_id] - len(metrics)
+            headroom = Z[parent_idx, 2] - dist
+        else:
+            headroom = float('inf')
+
+        # Calculate cluster width from leaf positions
+        leaf_positions = [5 + 10 * display_index[metrics[i].replace('PAPI_', '')] for i in leaves]
+        cluster_left = min(leaf_positions)
+        cluster_right = max(leaf_positions)
+        cluster_width = cluster_right - cluster_left if len(leaf_positions) > 1 else 10
+
+        label_width = len(rep) * char_width_x
+        label_too_wide = label_width > cluster_width / 2
+
+        # Root node (outermost cluster) is always centered, never rotated
+        if headroom == float('inf'):
+            ax.text(x, dist + 0.05, rep, ha="center", va="bottom", fontsize=fontsize,
+                    color="black", fontfamily="monospace", weight="bold")
+        # Rotate if label is wider than half the cluster, or if there's sufficient headroom
+        elif label_too_wide:
+            # Rotate 90° to save horizontal space
+            ax.text(x + 1.5, dist + 0.1, rep, ha="left", rotation=90, va="bottom", fontsize=fontsize,
+                    color="black", fontfamily="monospace", weight="bold")
+        else:
+            # All other horizontal labels: left-aligned
+            ax.text(x + 1, dist + 0.05, rep, ha="left", va="bottom", fontsize=fontsize,
+                    color="black", fontfamily="monospace", weight="bold")
+    # ax.set_xlabel("Metric")
+    ax.set_ylabel("Distance", fontsize=8)
+    # ax.set_ylim(0,11.4)
+    # ax.set_yticks(range(0, 12))
+    # ax.set_yticklabels([str(i) if i % 2 == 0 else '' for i in range(0, 12)],fontsize=7)
+    ax.grid(True, 'major', axis="y", color='lightgrey', linestyle='-', linewidth=0.5)
+    # ax.set_title(
+    #     "Metric Clustering by Deviation Pattern Across Kernels\n"
+    #     "(annotated by counter with lowest mean absolute deviation per cluster)"
+    # )
+    # fig.tight_layout()
+    fig.show()
+    fig.savefig(out_path, bbox_inches="tight")
+    print(f"wrote {out_path}")
+
+    # Print cluster summary
+    print("\nCluster representatives (lowest MAD per cluster):")
+    for cluster_id in sorted(numpy.unique(clusters), key=lambda c: metric_to_mad[cluster_reps[c]]):
+        rep = cluster_reps[cluster_id]
+        print(f"  Cluster {cluster_id}: {rep} (MAD={metric_to_mad[rep]:.3f})")
+
+
+def cluster_metrics_by_deviation2(deviations_by_metric, kernels, out_path, n_clusters=None):
+    """Cluster metrics based on similarity of their deviation patterns across kernels.
+
+    Builds a matrix where each row is a metric and each column is a kernel.
+    Metrics are clustered by Euclidean distance in deviation space.
+    """
+    # Sort metrics by mean absolute deviation (lowest first)
+    metrics = sorted(
+        deviations_by_metric.keys(),
+        key=lambda m: numpy.mean(numpy.abs(deviations_by_metric[m]))
+    )
+
+    # Build matrix: rows = metrics, cols = kernels
+    matrix = []
+    for metric in metrics:
+        row = [deviations_by_metric[metric][kernels.index(k)] if k in kernels else numpy.nan
+               for k in kernels]
+        matrix.append(row)
+    matrix = numpy.array(matrix)
+
+    # Normalize each metric's deviation vector
+    scaler = StandardScaler()
+    matrix_norm = scaler.fit_transform(matrix)
+
+    # Hierarchical clustering
+    distances = pdist(matrix_norm, metric="euclidean")
     Z = linkage(distances, method="weighted")
 
     # Cluster assignment
@@ -335,19 +554,37 @@ def cluster_metrics_by_deviation(deviations_by_metric, kernels, out_path, n_clus
         best = min(cluster_metrics, key=lambda m: metric_to_mad[m])
         cluster_reps[cluster_id] = best
 
-    # Plot dendrogram with color threshold
-    fig, ax = plt.subplots(figsize=(12, 8))
-    dendro_kwargs = {"Z": Z, "labels": metrics, "ax": ax, "leaf_font_size": 8, "leaf_rotation": 90}
+    # Plot dendrogram with heatmap of clustered data
+    fig, (ax, ax_heat) = plt.subplots(2, 1, figsize=(18.1374, 10, 'cm'),
+                                      gridspec_kw={'height_ratios': (1, 0.6), 'hspace': 0.15},
+                                      layout='constrained')
+    dendro_kwargs = {"Z": Z, "labels": [m.replace('PAPI_', '') for m in metrics], "ax": ax, "leaf_font_size": 7,
+                     "leaf_rotation": 90}
     if color_threshold is not None:
         dendro_kwargs["color_threshold"] = color_threshold
     dendro = dendrogram(**dendro_kwargs)
+    for label in ax.get_yticklabels():
+        label.set_fontfamily('monospace')
+
+    # Build rotated heatmap in dendrogram's leaf order (rows=kernels, cols=metrics)
+    reordered_metrics = [m for m in metrics if m.replace('PAPI_', '') in dendro["ivl"]]
+    reordered_metrics.sort(key=lambda m: list(dendro["ivl"]).index(m.replace('PAPI_', '')))
+    heat_grid = numpy.array([[deviations_by_metric[m][kernels.index(k)] if k in kernels else numpy.nan
+                              for m in reordered_metrics] for k in kernels])
+    bound = numpy.nanmax(numpy.abs(heat_grid))
+    im = ax_heat.imshow(heat_grid, cmap="RdBu_r", vmin=-bound, vmax=bound, aspect="auto")
+    ax_heat.set_xticks(range(len(reordered_metrics)), labels=[m.replace('PAPI_', '') for m in reordered_metrics],
+                       rotation=90, fontsize=6, fontfamily="monospace")
+    ax_heat.set_yticks(range(len(kernels)), labels=kernels, fontsize=6)
+    ax_heat.set_ylabel("Kernel", fontsize=8)
+    fig.colorbar(im, ax=ax_heat, label="Deviation", orientation='horizontal', pad=0.1, aspect=30)
 
     # Annotate every junction (each row of Z is one merge) with the lowest-MAD
     # metric among the leaves it joins. Leaf x-positions follow scipy's own
     # convention (5 + 10*display_index); a merge's x is the mean of its two
     # children's x, its y is just the linkage distance.
     display_index = {label: i for i, label in enumerate(dendro["ivl"])}
-    cluster_x = {i: 5 + 10 * display_index[metrics[i]] for i in range(len(metrics))}
+    cluster_x = {i: 5 + 10 * display_index[metrics[i].replace('PAPI_', '')] for i in range(len(metrics))}
     cluster_leaves = {i: {i} for i in range(len(metrics))}
 
     for row_idx, (a, b, dist, _count) in enumerate(Z):
@@ -358,22 +595,34 @@ def cluster_metrics_by_deviation(deviations_by_metric, kernels, out_path, n_clus
         cluster_x[merged_id] = x
         cluster_leaves[merged_id] = leaves
 
-        rep = min((metrics[i] for i in leaves), key=lambda m: metric_to_mad[m])
-        ax.text(x, dist, rep, ha="center", va="bottom", fontsize=9, color="red", weight="bold")
-
-    ax.set_xlabel("Metric")
-    ax.set_ylabel("Distance")
-    ax.set_title(
-        "Metric Clustering by Deviation Pattern Across Kernels\n"
-        "(annotated by counter with lowest mean absolute deviation per cluster)"
-    )
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+        rep = min((metrics[i] for i in leaves), key=lambda m: metric_to_mad[m]).replace('PAPI_', '')
+        if dist < 5.5:
+            ax.text(x + 1, dist + 0.1, rep, ha="left", rotation=90, va="bottom", fontsize=7, color="black",
+                    fontfamily="monospace", weight="bold")
+        elif dist > 10:
+            ax.text(x, dist + 0.05, rep, ha="center", va="bottom", fontsize=7, color="black",
+                    fontfamily="monospace", weight="bold")
+        else:
+            ax.text(x + 0.7, dist + 0.05, rep, ha="left", va="bottom", fontsize=7, color="black",
+                    fontfamily="monospace", weight="bold")
+    # ax.set_xlabel("Metric")
+    ax.set_ylabel("Distance", fontsize=8)
+    ax.set_ylim(0, 11.4)
+    ax.set_yticks(range(0, 12))
+    ax.set_yticklabels([str(i) if i % 2 == 0 else '' for i in range(0, 12)], fontsize=7)
+    ax.grid(True, 'major', axis="y", color='lightgrey', linestyle='-', linewidth=0.5)
+    # ax.set_title(
+    #     "Metric Clustering by Deviation Pattern Across Kernels\n"
+    #     "(annotated by counter with lowest mean absolute deviation per cluster)"
+    # )
+    # fig.tight_layout()
+    fig.show()
+    fig.savefig(out_path, bbox_inches="tight")
     print(f"wrote {out_path}")
 
     # Print cluster summary
     print("\nCluster representatives (lowest MAD per cluster):")
-    for cluster_id in sorted(numpy.unique(clusters)):
+    for cluster_id in sorted(numpy.unique(clusters), key=lambda c: metric_to_mad[cluster_reps[c]]):
         rep = cluster_reps[cluster_id]
         print(f"  Cluster {cluster_id}: {rep} (MAD={metric_to_mad[rep]:.3f})")
 
@@ -417,6 +666,12 @@ def parse_args():
         action="store_true",
         help="exclude hit/miss counters",
     )
+    parser.add_argument(
+        "--exclude-counters",
+        nargs="+",
+        metavar="COUNTER",
+        help="exclude these counter names from analysis",
+    )
     return parser.parse_args()
 
 
@@ -446,6 +701,10 @@ def main():
         # Filter out cache hit/miss metrics
         if args.exclude_hit_miss and is_cache_counter and is_cache_counter(metric.name):
             continue
+        # Filter out explicitly excluded counters
+        if args.exclude_counters and (
+                metric.name in args.exclude_counters or metric.name.replace('PAPI_', '') in args.exclude_counters):
+            continue
         predicted = leading_exponent(model.hypothesis.function)
         expected = truth[kernel]
         rows[(kernel, metric.name)] = (expected, predicted, predicted - expected)
@@ -467,11 +726,8 @@ def main():
         key=lambda r: r[1],
     )
 
-    # Apply cutoff to summary output
-    summary_cutoff_idx = len(summary) - 1  # default: include all
-    if find_cutoff is not None and len(summary) >= 3:
-        means = [-mean for _, mean, _ in summary]
-        summary_cutoff_idx = find_cutoff(means)
+    # Apply 0.5 MAD cutoff to summary output
+    summary_cutoff_idx = next((i - 1 for i, (_, mean_abs_dev, _) in enumerate(summary) if mean_abs_dev > 0.5), len(summary) - 1)
 
     print(f"{'metric':<28}{'mean |deviation|':>18}{'n kernels':>12}")
     for i, (metric, mean_abs_dev, n) in enumerate(summary):
@@ -521,11 +777,11 @@ def main():
             deviations_by_metric,
             key=lambda m: numpy.mean(numpy.abs(deviations_by_metric[m])),
         )
-        plot_heatmap(deviations, kernels, metrics, results_dir / "deviation_heatmap.png")
+        plot_heatmap(deviations, kernels, metrics, results_dir / "deviation_heatmap.pdf", deviations_by_metric)
         # Cluster only cutoff metrics
         cutoff_metrics = {m for m, _, _ in summary_for_output if m != 'time'}
         deviations_by_metric_cutoff = {m: v for m, v in deviations_by_metric.items() if m in cutoff_metrics}
-        cluster_metrics_by_deviation(deviations_by_metric_cutoff, kernels, results_dir / "metric_clustering.png",
+        cluster_metrics_by_deviation(deviations_by_metric_cutoff, kernels, results_dir / "metric_clustering.pdf",
                                      n_clusters=args.cluster_count)
 
 

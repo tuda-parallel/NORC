@@ -15,7 +15,8 @@ dependencies = [
   "PySide6~=6.6",
   "termcolor~=2.4",
   "pycubexr~=2.0,!=2.0.0",
-  "tqdm~=4.67"
+  "tqdm~=4.67",
+  "scipy~=1.17"
 ]
 authors = [
     { name = "Lukas Fuchs", email = "lukas.fuchs@stud.tu-darmstadt.de" },
