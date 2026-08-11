@@ -19,21 +19,21 @@ print_usage() {
   echo "Usage: $SCRIPT_NAME [OPTION]..."
   echo "OPTIONS:"
 
-  echo "\t-h, --help"
-  echo "\t\tPrints this help message"
+  printf "\t-h, --help\n"
+  printf "\t\tPrints this help message\n"
 
-  echo "\t-i N, --iterations N"
-  echo "\t\tNumber of iterations for each benchmark"
+  printf "\t-i N, --iterations N\n"
+  printf "\t\tNumber of iterations for each benchmark\n"
 
-  echo "\t-l, --local:"
-  echo "\t\tExecute benchmarks locally with mpirun rather than Slurm"
-  echo "\t\tDO NOT USE ON LOGIN NODES!"
+  printf "\t-l, --local:\n"
+  printf "\t\tExecute benchmarks locally with mpirun rather than Slurm\n"
+  printf "\t\tDO NOT USE ON LOGIN NODES!\n"
 
-  echo "\t-r N, --retry N:"
-  echo "\t\t Maximum number of retries for failed jobs"
+  printf "\t-r N, --retry N:\n"
+  printf "\t\t Maximum number of retries for failed jobs\n"
 
-  echo "\t-t, --reset-time:"
-  echo "\t\t Remove previous time measurements and use the initial estimate for each benchmark"
+  printf "\t-t, --reset-time:\n"
+  printf "\t\t Remove previous time measurements and use the initial estimate for each benchmark\n"
 }
 
 run_arrays() {
@@ -132,7 +132,10 @@ run_arrays() {
     fi
     set +o pipefail
     popd
-    job_id=$(get_positional 4 $batch_output)
+    # sbatch may print a preamble before
+    # the final "Submitted batch job <id>" line, so parse that line by content rather than
+    # by absolute word position, which would otherwise pick up a banner token.
+    job_id=$(echo "$batch_output" | awk '/Submitted batch job/{print $NF}')
     # The next job has to wait for this one to finish in order to prevent cross-contamination of noise patterns.
 
     for task_id in $(ls "$ARRAY_DIR"); do
@@ -198,6 +201,8 @@ build_arrays() {
       local nodes=$(get_positional 4 $experiment)
       local processes=$(get_positional 5 $experiment)
       local threads=$(get_positional 6 $experiment)
+      # Total number of MPI ranks, available to params-file formulas as $((ranks)).
+      local ranks=$((nodes * processes))
 
       local res_cfg="n${nodes}p${processes}t${threads}"
       local result_dir="$(pwd)/result/$benchmark/$system/$res_cfg"
@@ -232,7 +237,10 @@ build_arrays() {
 
           local jobfile=$ARRAY_DIR/$job_idx
 
-          local benchmark_params=$(awk "/^$param_set/ {print \$0}" config/benchmarks/$benchmark/params | cut -f 2- -d ' ')
+          local benchmark_params=$(awk -v p="$param_set" '$1 == p {$1 = ""; sub(/^ /, ""); print}' "config/benchmarks/$benchmark/params")
+          # Params-file entries may embed bash arithmetic, e.g. `-r $((ranks))`, so that
+          # a single line scales with the actual rank/thread counts of this experiment.
+          benchmark_params=$(eval "echo \"$benchmark_params\"")
 
           echo "#!/bin/bash" >"$jobfile"
           echo "export EXPERIMENT_DIRECTORY=\"$EXPERIMENT_DIRECTORY\"" >>"$jobfile"
@@ -273,7 +281,7 @@ while [ : ]; do
   case "$1" in
   -h | --help)
     print_usage
-    shift
+    exit 1
     ;;
   -i | --iterations)
     N_ITERATIONS=$2

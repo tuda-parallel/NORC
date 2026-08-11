@@ -10,8 +10,9 @@ import itertools
 import os
 import re
 import sys
+import zipfile
 
-from norc.helpers.util import data_selection, measurement_info
+from norc.helpers.util import data_selection, measurement_info, open_experiment_source
 from norc.core.score import compute_scores
 
 
@@ -359,17 +360,31 @@ def parse_metrics_cfg(path):
         List of groups (each a list of counter names), or [] if the file
         does not exist or contains no usable groups.
     """
-    groups = []
     try:
         with open(path, 'r') as f:
-            for line in f:
-                line = line.split('#', 1)[0].strip()
-                if not line:
-                    continue
-                groups.append([c.strip() for c in line.split(',') if c.strip()])
+            return _parse_metrics_cfg_lines(f)
     except (OSError, IOError):
         return []
+
+
+def _parse_metrics_cfg_lines(lines):
+    groups = []
+    for line in lines:
+        line = line.split('#', 1)[0].strip()
+        if not line:
+            continue
+        groups.append([c.strip() for c in line.split(',') if c.strip()])
     return groups
+
+
+def parse_metrics_cfg_from_tree(tree, path):
+    """Same as parse_metrics_cfg, but reads through an ExperimentTree so a zipped
+    experiment_root works exactly like a directory one."""
+    if not tree.exists(path):
+        return []
+    with tree.open_binary(path) as f:
+        text = f.read().decode("utf-8", errors="replace")
+    return _parse_metrics_cfg_lines(text.splitlines())
 
 
 def group_counters_via_metrics_cfg(counters, cfg_groups):
@@ -566,7 +581,8 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
 def main(argv=None):
     args = parse_args(argv)
 
-    if not os.path.isdir(args.experiment_root):
+    is_zip_root = os.path.isfile(args.experiment_root) and zipfile.is_zipfile(args.experiment_root)
+    if not os.path.isdir(args.experiment_root) and not is_zip_root:
         print(f"Error: experiment_root '{args.experiment_root}' not found", file=sys.stderr)
         sys.exit(1)
 
@@ -683,8 +699,9 @@ def main(argv=None):
         f"PAPI_{c}" if not c.startswith("PAPI_") else c
         for c, _ in selected_counters
     ]
-    metrics_cfg_path = os.path.join(args.experiment_root, "config", "metrics.cfg")
-    cfg_groups = parse_metrics_cfg(metrics_cfg_path)
+    with open_experiment_source(args.experiment_root) as tree:
+        metrics_cfg_path = os.path.join(tree.root, "config", "metrics.cfg")
+        cfg_groups = parse_metrics_cfg_from_tree(tree, metrics_cfg_path)
     if cfg_groups:
         fallback_counter_sets = group_counters_via_metrics_cfg(counters_with_prefix, cfg_groups)
     else:

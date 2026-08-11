@@ -10,7 +10,7 @@
 # https://github.com/tuda-parallel/NORC/blob/main/LICENSE
 source "$CONFIG_DIR/build_settings.sh"
 
-print_info "Removing previous installation and temporary files"
+echo "Removing previous installation and temporary files"
 
 rm -rf "$TMP_DIR"
 rm -rf "$INSTALL_DIR"

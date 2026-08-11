@@ -1,3 +1,4 @@
-s10r1 -s 10 -r 1
-s10r8 -s 10 -r 8
-s10r27 -s 10 -r 27
+# LULESH requires the rank count to be a perfect cube (1, 8, 27, ...) for its
+# domain decomposition, so only use rank counts that satisfy this in experiments.cfg.
+s10 -s 10 -r $((ranks))
+s_scaled -s $((10 + ranks / 3 + threads / 3)) -r $((ranks))

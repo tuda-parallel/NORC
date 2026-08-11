@@ -6,6 +6,10 @@
 # See the LICENSE file in the base directory for details.
 
 import sys
+import faulthandler
+
+faulthandler.enable()
+
 from PySide6.QtWidgets import QApplication, QToolTip
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtGui import QColor, QPalette, Qt

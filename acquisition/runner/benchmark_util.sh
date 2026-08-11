@@ -29,6 +29,18 @@ odd(){
   echo $cores
 }
 
+# generates a hex cpu-bind mask selecting the even-numbered cores out of $1 total cores.
+# every nibble covers 4 bits/cores and, aligned on an even bit, always has the pattern 0101 (hex 5),
+# so the mask is just that many "5" digits, which avoids overflowing bash's 64-bit integers on wide nodes.
+even_mask() {
+  local nibbles=$(( ($1 + 3) / 4 ))
+  local mask=""
+  for ((n = 0; n < nibbles; n++)); do
+    mask="${mask}5"
+  done
+  echo "0x$mask"
+}
+
 execution_directory() {
   local system="$1"
   local benchmark="$2"
@@ -76,23 +88,34 @@ job_from_template() {
     check_warn "WARNING: Benchmark $benchmark has an empty resource folder. Consider deleting it or adding resources."
   fi
 
+  # Ensure prologue/epilogue scripts are executable, since cp does not preserve
+  # the executable bit reliably across all filesystems (e.g. some network mounts).
+  for hook in prologue.sh epilogue.sh; do
+    if [ -f "$exec_dir/scratch/$hook" ]; then
+      chmod +x "$exec_dir/scratch/$hook"
+    fi
+  done
+
   # NOIGENA always runs on half the available cores so that the noise level will always be roughly the same.
   local n_procs_noigena=$(( CORES_PER_NODE / 2 ))
   local n_procs_total=$(( n_procs_benchmark + n_procs_noigena ))
+  local n_procs_global=$(( n_procs_total * $n_nodes ))
 
   # Add the job script's main part (still a template)
   cat config/job_templates/$JOB_TEMPLATE.sh >> "$jobscript"
 
   # Fill in the job template's parameters to create a working script for sbatch.
   sed -i "s|§benchmark|$benchmark|g;
-          s|§status_out|$(pwd)/status/out/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
-          s|§status_err|$(pwd)/status/err/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
+          s|§status_out|$STATUS_DIR/out/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
+          s|§status_err|$STATUS_DIR/err/$benchmark/${system}n${n_nodes}p${n_procs_benchmark}t${n_threads}|g;
           s|§nodes|$n_nodes|g;
           s|§procs|$n_procs_benchmark|g;
           s|§noise_procs|$n_procs_noigena|g;
           s|§threads|$n_threads|g;
           s|§total_tasks|$n_procs_total|g;
+          s|§global_tasks|$n_procs_global|g;
           s|§cpus|$CORES_PER_NODE|g;
+          s|§even_cpus_mask|$(even_mask $CORES_PER_NODE)|g;
           s|§odd_cpus|$(odd $CORES_PER_NODE)|g;
           s|§even_cpus|$(even $CORES_PER_NODE)|g;
           s|§partition|$PARTITION|g;
@@ -113,7 +136,7 @@ estimate_time() {
   # Flatten the content of all files to a list of numbers and iterate it
   for t in $(cat $1/*); do
     sum=$((sum + t))
-    if [[ $t > $max ]]; then
+    if (( t > max )); then
       max=$t
     fi
     count=$((count + 1))

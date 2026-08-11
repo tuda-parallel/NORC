@@ -18,7 +18,7 @@ from PySide6.QtCore import QObject, Signal
 
 import norc.core.plot_rel_dev as prd
 from norc.core.score import score, score_group
-from norc.helpers.util import measurement_info, available_measurements, experiment_filter, warn
+from norc.helpers.util import measurement_info, available_measurements, experiment_filter, warn, open_experiment_source
 
 
 class PlotManager(QObject):
@@ -70,12 +70,15 @@ class PlotManager(QObject):
         self.metrics.clear()
 
         # Check if there is anything to load
-        deviation_dir = os.path.join(self.experiment_root, "result", ".deviations")
-        if not os.path.exists(deviation_dir):
+        tree = self.plot_settings.tree
+        if tree is None:
+            return
+        deviation_dir = os.path.join(tree.root, "result", ".deviations")
+        if not tree.isdir(deviation_dir):
             return
 
         # Get all available plot infos
-        self.infos = available_measurements(deviation_dir, self.plot_settings.selection)
+        self.infos = available_measurements(tree, deviation_dir, self.plot_settings.selection)
 
         # Repopulate parameters
         for inf in self.infos.values():
@@ -106,8 +109,22 @@ class PlotManager(QObject):
         self.reconfigured.emit()
 
     def open_experiment(self, experiment_root):
+        # A worker may currently be mid-read on the old tree (plot_calculation_/
+        # score_calculation_ only take config_mutex_ briefly, around the version
+        # check and the result write - the actual file I/O in between happens
+        # unguarded). Drain the pool before closing that tree below, or a worker
+        # can end up reading from a closed zip file handle, which is a native
+        # crash, not a Python exception. Done outside update_config_'s lock,
+        # since workers need it to finish (to write their result/decrement
+        # pending_*) and waiting for them while holding it would deadlock.
+        self.workers_.shutdown(wait=True)
+        self.workers_ = concurrent.futures.ThreadPoolExecutor(1)
+
         def fn():
+            if self.plot_settings.tree is not None:
+                self.plot_settings.tree.close()
             self.experiment_root = experiment_root
+            self.plot_settings.tree = open_experiment_source(experiment_root, read_only=True)
             self.update_available_measurements_()
             return True, True
 
@@ -176,13 +193,23 @@ class PlotManager(QObject):
 
     def plot_calculation_(self, info: measurement_info, config_version):
         # Only start a calculation if the results would still be up to date.
+        # self.plot_settings is shared, mutable state that update_config_()
+        # can replace/mutate concurrently (e.g. a reconfigure clearing
+        # self.infos, or the tree being swapped out) - snapshot everything
+        # this calculation needs while holding the lock instead of reading
+        # the live attributes later, unguarded, from this worker thread.
+        # (.tree itself is intentionally still shared: it's a single open
+        # handle, not something we want to copy - it's protected separately
+        # by draining pending workers before it's ever closed.)
         with self.config_mutex_:
             if config_version != self.config_version_:
                 return
+            settings = copy(self.plot_settings)
+            settings.selection = copy(self.plot_settings.selection)
 
         t_start = time.process_time()
         # Calculate the plot for the given plot info
-        result = prd.prepare_plot(self.plot_settings, info)
+        result = prd.prepare_plot(settings, info)
 
         # Only write the result if it still fits the configuration
         with self.config_mutex_:
@@ -202,13 +229,24 @@ class PlotManager(QObject):
             if config_version != self.config_version_:
                 return
 
-        if info.noise_pattern == "NO_NOISE":
-            # Score request for NO_NOISE rejected. Scores are always for a noisy/reference pair.
+            if info.noise_pattern == "NO_NOISE":
+                # Score request for NO_NOISE rejected. Scores are always for a noisy/reference pair.
+                return
+
+            # See plot_calculation_ for why this is snapshotted under the
+            # lock rather than read live further down: self.infos and
+            # self.plot_settings.selection can be replaced/mutated by a
+            # concurrent reconfigure while this worker is busy.
+            ref_info = self.infos.get(info.noiseless_key())
+            selection = copy(self.plot_settings.selection)
+            tree = self.plot_settings.tree
+
+        if ref_info is None:
             return
 
         t_start = time.process_time()
 
-        scr = score(info, self.infos[info.noiseless_key()], self.plot_settings.selection)
+        scr = score(info, ref_info, selection, tree)
 
         # Only write the result if it still fits the configuration.
         with self.config_mutex_:

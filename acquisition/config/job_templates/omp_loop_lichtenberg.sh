@@ -9,7 +9,7 @@
 #SBATCH --ntasks-per-node §total_tasks
 #SBATCH --exclusive
 #SBATCH --time §time
-#SBATCH --mem 0  # We have exclusive access so use all memory available
+#SBATCH --mem-per-cpu 3GB
 
 next_job_step=0
 noigena_job_step=""
@@ -67,7 +67,7 @@ for array_id in $(ls -v $ARRAY_DIR); do
 
   echo "=== Start $EXPERIMENT_DIRECTORY ==="
   echo "=== Start $EXPERIMENT_DIRECTORY ===" >&2
-
+ 
   if [ -f ./prologue.sh ]; then
     ./prologue.sh
   fi

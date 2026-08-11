@@ -20,26 +20,8 @@ source "$CONFIG_DIR/build_settings.sh"
 export INSTALL_DIR=build
 export TMP_DIR=tmp
 
-###########################ENVIRONMENT######################
-# Overrides the system path at the start of setup.
-# Adding to this may introduce ambiguity and surprises.
-export CLEAN_PATH=/bin:/usr/sbin
 
-###########################Globalization####################
-mkdir -p "$INSTALL_DIR"
-globalize "INSTALL_DIR"
-mkdir -p "$INSTALL_DIR/bin"
-mkdir -p "$INSTALL_DIR/lib"
-
-mkdir -p "$TMP_DIR"
-globalize "TMP_DIR"
-
-export PATH="$CLEAN_PATH"
-
-# Add installed programs and libraries to the path so other scripts can use them
-export PATH="$INSTALL_DIR/bin:$PATH"
-export LD_LIBRARY_PATH="$INSTALL_DIR/lib:$LD_LIBRARY_PATH"
-
+#####################ARGUMENTS PARSING######################
 do_install=true
 quiet=false
 
@@ -48,6 +30,7 @@ while getopts "fsq" opt; do
   case "${opt}" in
   f)
     print_info "-f specified. Force-rebuilding everything."
+    chmod +x util/clean.sh
     util/clean.sh                          # deleting the old installation forces rebuild
     source "$CONFIG_DIR/build_settings.sh" # recreate deleted folders
     ;;
@@ -65,6 +48,23 @@ while getopts "fsq" opt; do
   esac
 done
 
+###########################Globalization####################
+mkdir -p "$INSTALL_DIR"
+globalize "INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/bin"
+mkdir -p "$INSTALL_DIR/lib"
+
+mkdir -p "$TMP_DIR"
+globalize "TMP_DIR"
+
+export CLEAN_PATH="$PATH"
+
+# Add installed programs and libraries to the path so other scripts can use them
+export PATH="$INSTALL_DIR/bin:$PATH"
+export LD_LIBRARY_PATH="$INSTALL_DIR/lib:$LD_LIBRARY_PATH"
+
+###################CONFIG ASSISTANT##########################
+
 if [ ! -f "$CONFIG_DIR/config_done" ] && ! $quiet; then
   read -p "Is the configuration updated for this system? [y,N] " -n 1 -r
   echo # (optional) move to a new line
@@ -75,6 +75,10 @@ if [ ! -f "$CONFIG_DIR/config_done" ] && ! $quiet; then
   fi
   touch "$CONFIG_DIR/config_done"
 fi
+
+export PATH="$CLEAN_PATH"
+export PATH="$INSTALL_DIR/bin:$PATH"
+export LD_LIBRARY_PATH="$INSTALL_DIR/lib:$LD_LIBRARY_PATH"
 
 # source again the new build settings
 source "$CONFIG_DIR/build_settings.sh"

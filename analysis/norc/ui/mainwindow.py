@@ -8,11 +8,12 @@
 import os
 from copy import copy
 
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QMainWindow, QCheckBox, QStyle, QProgressDialog, QApplication
+from PySide6.QtGui import QIcon
 from PySide6.QtCore import Qt
 import matplotlib
 
-from norc.helpers.util import experiment_filter, available_measurements
+from norc.helpers.util import experiment_filter, available_measurements, open_experiment_source
 from norc.ui.examine_tab import examine_tab
 from norc.ui.ratings_tab import ratings_tab
 from norc.ui.generate_dialog import generate_dialog
@@ -42,7 +43,17 @@ class main_window(QMainWindow):
         self.ui.sb_thr_contrib.editingFinished.connect(self.update_config)
         self.ui.sb_thr_visits.editingFinished.connect(self.update_config)
 
-        self.ui.action_open.triggered.connect(self.open_experiment_dialog)
+        # Freedesktop icon themes (set via `iconset theme=` in the .ui file) aren't
+        # available on all platforms (e.g. Windows), so fall back to Qt's built-in
+        # standard icons whenever the theme lookup comes back empty.
+        style = self.style()
+        if self.ui.action_open.icon().isNull():
+            self.ui.action_open.setIcon(style.standardIcon(QStyle.SP_DirOpenIcon))
+        if self.ui.action_open_zip.icon().isNull():
+            self.ui.action_open_zip.setIcon(style.standardIcon(QStyle.SP_DriveHDIcon))
+
+        self.ui.action_open.triggered.connect(self.open_experiment_folder_dialog)
+        self.ui.action_open_zip.triggered.connect(self.open_experiment_zip_dialog)
         self.ui.actionCreate_Measurement_Runner.triggered.connect(self.open_generate_dialog)
 
         # Grouping UI
@@ -53,6 +64,9 @@ class main_window(QMainWindow):
         self.ui.cb_lump_noise.stateChanged.connect(self.update_config)
 
         self.update_config()
+
+        self.ui.btn_flt_select_all.clicked.connect(lambda: self.set_current_filters_checked(True))
+        self.ui.btn_flt_deselect_all.clicked.connect(lambda: self.set_current_filters_checked(False))
 
         self.update_filter_ui()
         self.appstate.plt_mgr.reconfigured.connect(self.update_filter_ui)
@@ -73,17 +87,39 @@ class main_window(QMainWindow):
             noise=self.ui.cb_lump_noise.checkState() == Qt.Checked,
         )
 
-    def open_experiment_dialog(self):
+    def open_experiment_folder_dialog(self):
         dialog = QFileDialog(self.ui)
         dialog.setFileMode(QFileDialog.Directory)
+        self._open_experiment_from_dialog(dialog)
+
+    def open_experiment_zip_dialog(self):
+        dialog = QFileDialog(self.ui)
+        dialog.setFileMode(QFileDialog.ExistingFile)
+        dialog.setNameFilter("Zip archives (*.zip)")
+        self._open_experiment_from_dialog(dialog)
+
+    def _open_experiment_from_dialog(self, dialog):
         if dialog.exec():
-            exdir = dialog.selectedFiles()[0]
-            if not os.path.isdir(os.path.join(exdir, "result")):
+            selected = dialog.selectedFiles()[0]
+            try:
+                # Only used to validate the selection; closed before analyze_experiment
+                # and plt_mgr.open_experiment (which open their own handles) run, so we
+                # never have more than one handle on the same zip archive open at once.
+                with open_experiment_source(selected, read_only=True) as tree:
+                    has_result = tree.isdir(os.path.join(tree.root, "result"))
+                    has_deviations = has_result and tree.isdir(os.path.join(tree.root, "result", ".deviations"))
+            except FileNotFoundError as e:
                 dlg = QMessageBox(self)
-                dlg.setText("The selected directory does not contain a result.")
+                dlg.setText(str(e))
                 dlg.exec()
                 return
-            if not os.path.isdir(os.path.join(exdir, "result", ".deviations")):
+
+            if not has_result:
+                dlg = QMessageBox(self)
+                dlg.setText("The selected experiment does not contain a result.")
+                dlg.exec()
+                return
+            if not has_deviations:
                 dlg = QMessageBox(self)
                 dlg.setText(
                     "A measurement result was found but no deviations are present.\nCalculate them now (may take a while)?"
@@ -91,13 +127,57 @@ class main_window(QMainWindow):
                 dlg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
                 resp = dlg.exec()
                 if resp == QMessageBox.Yes:
-                    analyze_experiment(exdir)
+                    if not self._calculate_deviations(selected):
+                        return
                 else:
                     return
 
-            self.appstate.plt_mgr.open_experiment(exdir)
+            self.appstate.plt_mgr.open_experiment(selected)
 
         self.update_config()
+
+    def _calculate_deviations(self, experiment_root):
+        """Run the deviation calculation while showing a modal progress window.
+
+        The calculation runs on the GUI thread; the event loop is pumped after
+        each measurement (via the progress callback) so the dialog stays
+        responsive and the bar advances. Returns True on success, or False if
+        the calculation failed, in which case an error is shown and any partial
+        output has already been cleaned up by analyze_experiment.
+        """
+        progress = QProgressDialog(self.ui)
+        progress.setWindowTitle("Analyzing experiment")
+        progress.setLabelText("Calculating deviations…")
+        # analyze_experiment has no safe mid-run cancellation point, so don't offer one.
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        # Show a busy indicator until the first callback reports the measurement count.
+        progress.setRange(0, 0)
+        progress.show()
+
+        def on_progress(done, total):
+            progress.setMaximum(total)
+            progress.setValue(done)
+            progress.setLabelText(f"Calculating deviations… ({done}/{total} measurements)")
+            QApplication.processEvents()
+
+        error = None
+        try:
+            analyze_experiment(experiment_root, progress_callback=on_progress)
+        except Exception as e:
+            error = str(e)
+        progress.close()
+
+        if error is not None:
+            dlg = QMessageBox(self)
+            dlg.setIcon(QMessageBox.Critical)
+            dlg.setText(f"Deviation calculation failed:\n{error}")
+            dlg.exec()
+            return False
+        return True
 
     def open_generate_dialog(self):
         if not self.appstate.plt_mgr.experiment_root:
@@ -109,32 +189,61 @@ class main_window(QMainWindow):
         dialog = generate_dialog(self.appstate, self)
         dialog.exec()
 
+    # experiment_filter treats an empty filter string as "accept everything",
+    # since that's also what it means when no filter was specified at all
+    # (e.g. from the CLI). That makes "" ambiguous with "the user unchecked
+    # every box", which would otherwise show everything instead of nothing.
+    # Use a sentinel that can't match any real dimension value to represent
+    # that case explicitly.
+    _NONE_SELECTED = "\x00none-selected\x00"
+
+    def _build_filter_string(self, key):
+        boxes = self.filter_boxes[key]
+        checked = [cb.text() for cb in boxes if cb.isChecked()]
+        if boxes and not checked:
+            return self._NONE_SELECTED
+        return ",".join(checked)
+
     def apply_filters(self):
         if self._filtering_in_progress:
             return
         self._filtering_in_progress = True
-        benchmarks = ""
-        systems = ""
-        noises = ""
-        metrics = ""
 
-        for cb in self.filter_boxes["benchmark"]:
-            if cb.isChecked():
-                benchmarks += f"{cb.text()},"
-        for cb in self.filter_boxes["system"]:
-            if cb.isChecked():
-                systems += f"{cb.text()},"
-        for cb in self.filter_boxes["noise"]:
-            if cb.isChecked():
-                noises += f"{cb.text()},"
-        for cb in self.filter_boxes["counter"]:
-            if cb.isChecked():
-                metrics += f"{cb.text()},"
+        benchmarks = self._build_filter_string("benchmark")
+        systems = self._build_filter_string("system")
+        noises = self._build_filter_string("noise")
+        metrics = self._build_filter_string("counter")
 
         self.appstate.plt_mgr.set_filter(
             experiment_filter(benchmarks, systems, noises, metrics)
         )
         self._filtering_in_progress = False
+
+    def set_current_filters_checked(self, checked):
+        page_to_key = {
+            self.ui.pg_flt_benchmark: "benchmark",
+            self.ui.pg_flt_system: "system",
+            self.ui.pg_flt_noise: "noise",
+            self.ui.pg_flt_metric: "counter",
+        }
+        key = page_to_key.get(self.ui.tb_filters.currentWidget())
+        if key is None:
+            return
+        # Setting each checkbox individually would fire apply_filters() per
+        # checkbox, and that in turn triggers update_filter_ui() (via the
+        # plt_mgr.reconfigured signal), which tears down and rebuilds this
+        # very list of checkboxes mid-loop. Block signals and apply once at
+        # the end instead.
+        try:
+            for cb in self.filter_boxes[key]:
+                cb.blockSignals(True)
+            for cb in self.filter_boxes[key]:
+                cb.setChecked(checked)
+            QApplication.processEvents()
+        finally:
+            for cb in self.filter_boxes[key]:
+                cb.blockSignals(False)
+        self.apply_filters()
 
     def update_filter_ui(self):
         plt_mgr = self.appstate.plt_mgr
@@ -153,8 +262,11 @@ class main_window(QMainWindow):
         self.filter_boxes = {"benchmark": [], "system": [], "noise": [], "counter": []}
 
         # Check if there is anything to load
-        deviation_dir = os.path.join(plt_mgr.experiment_root, "result", ".deviations")
-        if not os.path.exists(deviation_dir):
+        tree = plt_mgr.plot_settings.tree
+        if tree is None:
+            return
+        deviation_dir = os.path.join(tree.root, "result", ".deviations")
+        if not tree.isdir(deviation_dir):
             return
 
         # Get all available plot infos
@@ -163,7 +275,7 @@ class main_window(QMainWindow):
         noises = set()
         metrics = set()
 
-        for inf in available_measurements(deviation_dir, sel).values():
+        for inf in available_measurements(tree, deviation_dir, sel).values():
             benchmarks.add(inf.benchmark)
             systems.add(inf.system)
             noises.add(inf.noise_pattern)
