@@ -20,28 +20,45 @@
 # ever modified, so the regular acquisition pipeline is untouched.
 #
 # Usage:
-#   ./submit_calibration_job.sh <system> <experiment_root> [extra run_benchmarks.py args...]
-#   ./submit_calibration_job.sh <system> --counters PAPI_A,PAPI_B,... [extra args...]
-#   ./submit_calibration_job.sh <system> --counters-file counters.list [extra args...]
+#   ./submit_calibration_job.sh <system> <experiment_root> [options] [extra run_benchmarks.py args...]
+#   ./submit_calibration_job.sh <system> --counters PAPI_A,PAPI_B,... [options] [extra args...]
+#   ./submit_calibration_job.sh <system> --counters-file counters.list [options] [extra args...]
 #   ./submit_calibration_job.sh <system> --resume exec_dir [extra args...]
 #
 #   <system>          One of NORC/acquisition/config/systems/* (e.g. local, gh,
 #                     dp-cn-seq). Picks PARTITION/BUDGET/CORES_PER_NODE/JOB_TEMPLATE.
 #   <experiment_root> NORC experiment root to score for the Phase-2 resilience
 #                     cutoff (same argument norc_redundancy takes), via
-#                     generate_papi_counters.py.
+#                     generate_papi_counters.py. Also doubles as the default
+#                     storage location (see --local below).
 #   --counters        Skip that scoring step entirely and measure exactly this
 #                     comma-separated counter list (the "PAPI_" prefix is
 #                     added if missing, same as generate_papi_counters.py).
 #   --counters-file   Skip scoring and use this papi_counters.list-format file
 #                     as-is (one "PAPI_XXX", entry per line, // comments OK).
 #   --resume          Continue a previous run instead of starting a new one:
-#                     reuses exec_dir (an exec/polybench.<system>.<timestamp>/
-#                     dir from a prior call) as-is -- same papi_counters.list,
-#                     same --output-dir -- so run_benchmarks.py finds that
-#                     run's results.jsonl and skips whatever's already OK in
-#                     it (e.g. after a timed-out job) instead of redoing it.
+#                     reuses exec_dir (a previously-created
+#                     .../modeling_quality/polybench.<system>.<timestamp>/ or
+#                     .../exec/polybench.<system>.<timestamp>/ dir) as-is --
+#                     same papi_counters.list, same --output-dir -- so
+#                     run_benchmarks.py finds that run's results.jsonl and
+#                     skips whatever's already OK in it (e.g. after a
+#                     timed-out job) instead of redoing it.
+#   --experiment-root DIR  Store results under DIR/modeling_quality/ instead of
+#                     under this script's own exec/ (see --local). Only
+#                     meaningful with --counters/--counters-file, where there's
+#                     no positional <experiment_root> to default to already.
+#   --local           Store results under this script's own
+#                     exec/polybench.<system>.<timestamp>/ instead of inside
+#                     the NORC experiment (the default whenever an
+#                     <experiment_root> or --experiment-root is known).
 #   extra args        Forwarded to run_benchmarks.py (e.g. --multipliers, --benchmarks).
+#
+# Where results are stored:
+#   By default, results land in <experiment_root>/modeling_quality/polybench.
+#   <system>.<timestamp>/ -- alongside the rest of that NORC experiment. Pass
+#   --local (or omit both <experiment_root> and --experiment-root) to store
+#   them under this script's own exec/ directory instead.
 #
 # Env overrides:
 #   POLYBENCH_DIR     Path to the NORC-side PolyBench dir (default: the vendored
@@ -61,9 +78,9 @@ ACQ_DIR="$NORC_ROOT/acquisition"
 POLYBENCH_DIR="${POLYBENCH_DIR:-$MQ_DIR/benchmarks/polybench}"
 
 print_usage() {
-  echo "Usage: $0 <system> <experiment_root> [extra run_benchmarks.py args...]" >&2
-  echo "       $0 <system> --counters PAPI_A,PAPI_B,... [extra args...]" >&2
-  echo "       $0 <system> --counters-file counters.list [extra args...]" >&2
+  echo "Usage: $0 <system> <experiment_root> [--local] [extra run_benchmarks.py args...]" >&2
+  echo "       $0 <system> --counters PAPI_A,PAPI_B,... [--experiment-root DIR | --local] [extra args...]" >&2
+  echo "       $0 <system> --counters-file counters.list [--experiment-root DIR | --local] [extra args...]" >&2
   echo "       $0 <system> --resume exec_dir [extra args...]" >&2
 }
 
@@ -80,6 +97,30 @@ case "$system" in
     ;;
 esac
 shift
+
+# Pull --local/--experiment-root out regardless of position, since they can
+# appear alongside any of --counters/--counters-file/<experiment_root> below.
+local_storage=false
+explicit_experiment_root=""
+remaining=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --local)
+      local_storage=true
+      shift
+      ;;
+    --experiment-root)
+      explicit_experiment_root="$2"
+      shift 2
+      ;;
+    *)
+      remaining+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${remaining[@]}"
+
 case "$1" in
   --counters)
     counters_csv="$2"
@@ -156,7 +197,24 @@ if [ -n "${resume_dir:-}" ]; then
   counters_file="$exec_dir/papi_counters.list"
   echo "Resuming $exec_dir"
 else
-  exec_dir="$MQ_DIR/exec/polybench.$system.$(date +%Y%m%d_%H%M%S)"
+  # Default: store inside the NORC experiment (<experiment_root>/modeling_quality/
+  # or --experiment-root DIR/modeling_quality/) so results live next to the rest
+  # of that experiment's data. --local (or no experiment root known at all, e.g.
+  # --counters without --experiment-root) falls back to this script's own exec/.
+  if [ "$local_storage" = true ]; then
+    storage_root="$MQ_DIR/exec"
+  elif [ -n "${experiment_root:-}" ]; then
+    storage_root="$experiment_root/modeling_quality"
+  elif [ -n "$explicit_experiment_root" ]; then
+    if [ ! -d "$explicit_experiment_root" ]; then
+      echo "error: --experiment-root '$explicit_experiment_root' does not exist" >&2
+      exit 1
+    fi
+    storage_root="$explicit_experiment_root/modeling_quality"
+  else
+    storage_root="$MQ_DIR/exec"
+  fi
+  exec_dir="$storage_root/polybench.$system.$(date +%Y%m%d_%H%M%S)"
   counters_file="$exec_dir/papi_counters.list"
 fi
 mkdir -p "$exec_dir/status_out" "$exec_dir/status_err" "$exec_dir/results"

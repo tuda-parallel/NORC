@@ -25,7 +25,9 @@ from norc.core.generate import (
     group_counters_via_metrics_cfg,
     is_job_array,
     is_sbatch_script,
+    load_mqm_selection,
     parse_metrics_cfg,
+    render_counter_comment,
     select_counters,
 )
 from norc.core.score import score, score_group
@@ -380,6 +382,49 @@ class TestSelectCounters(unittest.TestCase):
 
         selected = select_counters(self.sgp, 3, 0.95)
         self.assertEqual(len(selected), 0)  # None meet threshold
+
+
+class TestLoadMqmSelection(unittest.TestCase):
+    """Test reading counters from a modeling_quality selected_counters.json."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmpdir.name, "selected_counters.json")
+        with open(self.path, "w") as f:
+            import json
+            json.dump({
+                "rule_based": {
+                    "Load instructions": {"counter": "PAPI_LD_INS", "mean_abs_deviation": 0.2},
+                    "Total instructions": {"counter": "PAPI_TOT_INS", "mean_abs_deviation": 0.3},
+                },
+                "clustered": {
+                    "1": {"counter": "PAPI_LD_INS", "mean_abs_deviation": 0.2},
+                    "2": {"counter": "PAPI_FP_OPS", "mean_abs_deviation": 0.1},
+                },
+            }, f)
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_default_rule_based_only(self):
+        selected = load_mqm_selection(self.path, "rule_based")
+        self.assertEqual([c for c, _ in selected], ["PAPI_LD_INS", "PAPI_TOT_INS"])
+
+    def test_clustered_only(self):
+        selected = load_mqm_selection(self.path, "clustered")
+        self.assertEqual([c for c, _ in selected], ["PAPI_FP_OPS", "PAPI_LD_INS"])
+
+    def test_both_deduplicates_and_sorts_by_deviation(self):
+        selected = load_mqm_selection(self.path, "both")
+        self.assertEqual(
+            [c for c, _ in selected], ["PAPI_FP_OPS", "PAPI_LD_INS", "PAPI_TOT_INS"]
+        )
+
+    def test_render_counter_comment_from_mqm(self):
+        comment = render_counter_comment([("PAPI_LD_INS", 0.2)], from_mqm=True)
+        self.assertIn("MQM modeling-quality analysis", comment)
+        self.assertIn("PAPI_LD_INS", comment)
+        self.assertIn("mean_abs_deviation=0.2000", comment)
 
 
 class TestNorcGenerateIntegration(unittest.TestCase):

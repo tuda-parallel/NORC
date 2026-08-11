@@ -114,6 +114,30 @@ Hierarchical organization by:
 
 ---
 
+## Modeling-Quality (MQM) Results Structure
+
+`modeling_quality/submit_calibration_job.sh` (a.k.a. `run_mq_analysis`) stores
+its PolyBench calibration runs under the experiment by default:
+
+```
+experiment_root/
+├── result/, config/, status/    # (as above)
+│
+└── modeling_quality/
+    └── polybench.<system>.<timestamp>/
+        ├── job.sh
+        ├── papi_counters.list
+        ├── build/
+        └── results/
+            ├── results.jsonl, results.json, results_extrap.json
+            ├── metric_ranking_by_deviation.json
+            ├── selected_counters.json          # {"rule_based": {...}, "clustered": {...}}
+            └── deviations.csv, deviation_heatmap.pdf, metric_clustering.pdf, ...
+```
+
+Pass `--local` to store this under `modeling_quality/exec/` (next to the
+scripts) instead of inside the experiment.
+
 ## Analysis Results Structure
 
 After running `norc_analyze`, the experiment gains a `.deviations/` subdirectory:

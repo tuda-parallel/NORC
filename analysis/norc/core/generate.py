@@ -7,6 +7,7 @@
 
 import argparse
 import itertools
+import json
 import os
 import re
 import sys
@@ -23,7 +24,11 @@ def parse_args(argv=None):
 
     parser.add_argument(
         "experiment_root",
-        help="NORC experiment directory (contains result/.deviations/)"
+        nargs="?",
+        default=None,
+        help="NORC experiment directory (contains result/.deviations/). "
+             "Required unless --counters-file is given; when given alongside "
+             "--counters-file, still used for the metrics.cfg fallback grouping."
     )
     parser.add_argument(
         "template_script",
@@ -63,6 +68,25 @@ def parse_args(argv=None):
              "filtered by --min-resilience)"
     )
 
+    mqm_group = parser.add_argument_group(
+        "MQM counter selection (alternative to the resilience selection above)"
+    )
+    mqm_group.add_argument(
+        "--counters-file",
+        help="Read counters from a modeling_quality 'selected_counters.json' "
+             "file (written by compare_to_ground_truth.py) instead of "
+             "computing NORC resilience scores from experiment_root -- "
+             "--top/--min-resilience/-c/-v/--auto-cutoff are ignored"
+    )
+    mqm_group.add_argument(
+        "--counter-set",
+        choices=["rule_based", "clustered", "both"],
+        default="rule_based",
+        help="Which counter set(s) to use from --counters-file (default: "
+             "rule_based; 'both' unions rule_based and clustered, "
+             "deduplicated by keeping the lower mean_abs_deviation)"
+    )
+
     var_group = parser.add_argument_group("parameters")
     var_group.add_argument(
         "--var",
@@ -98,7 +122,8 @@ def parse_args(argv=None):
     )
     output_group.add_argument(
         "--prefix",
-        help="Optional prefix for result directory names (Extra-P standard)"
+        help="Prefix for result directory names (Extra-P standard). "
+             "Default: the template script's basename without extension."
     )
     output_group.add_argument(
         "--no-log-capture",
@@ -286,6 +311,28 @@ def select_counters(sgp, top_n, min_resilience, use_cutoff=False):
     return selected
 
 
+def load_mqm_selection(path, counter_set):
+    """Read counters from a modeling_quality `selected_counters.json` (written
+    by compare_to_ground_truth.py) instead of computing NORC resilience scores.
+
+    Returns a list of (counter_name, mean_abs_deviation) tuples, sorted by
+    increasing deviation (best first). When counter_set is "both", rule_based
+    and clustered are merged, keeping the lower deviation for counters present
+    in both.
+    """
+    with open(path) as f:
+        data = json.load(f)
+
+    keys = ("rule_based", "clustered") if counter_set == "both" else (counter_set,)
+    best = {}
+    for key in keys:
+        for entry in data.get(key, {}).values():
+            counter, mad = entry["counter"], entry["mean_abs_deviation"]
+            if counter not in best or mad < best[counter]:
+                best[counter] = mad
+    return sorted(best.items(), key=lambda cm: cm[1])
+
+
 def expand_combinations(var_specs):
     """Expand --var specifications into all combinations."""
     if not var_specs:
@@ -431,8 +478,15 @@ def group_counters_via_metrics_cfg(counters, cfg_groups):
     return sets
 
 
-def render_counter_comment(selected_counters):
+def render_counter_comment(selected_counters, from_mqm=False):
     """Render comment with counter information."""
+    if from_mqm:
+        lines = ["# HW counters selected from MQM modeling-quality analysis (selected_counters.json)"]
+        for rank, (counter, mad) in enumerate(selected_counters, 1):
+            counter_name = f"PAPI_{counter}" if not counter.startswith("PAPI_") else counter
+            lines.append(f"# Rank {rank}: {counter_name}  (mean_abs_deviation={mad:.4f})")
+        return "\n".join(lines)
+
     lines = [
         "# HW counters selected by NORC resilience analysis"
     ]
@@ -503,13 +557,14 @@ def render_array_dir_injection(indent):
     ]
 
 
-def render_orchestration_script(args, selected_counters, fallback_counter_sets, combinations, template, is_sbatch):
+def render_orchestration_script(args, selected_counters, fallback_counter_sets, combinations, template, is_sbatch,
+                                 from_mqm=False):
     """Render the orchestration wrapper script."""
     lines = []
 
     lines.append("#!/bin/bash")
     lines.append("")
-    lines.append(render_counter_comment(selected_counters))
+    lines.append(render_counter_comment(selected_counters, from_mqm=from_mqm))
     lines.append("")
     lines.append("set -e  # exit on error")
     lines.append("")
@@ -560,7 +615,7 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
         # No variables, just iterate over counters and iterations
         lines.append("for COUNTER_SET in \"${counter_sets[@]}\"; do")
         lines.append("    for iter in $(seq 1 $ITERATIONS); do")
-        lines.append("        RESULT_DIR=\"result/r${iter}\"")
+        lines.append(f"        RESULT_DIR=\"result/{args.prefix}.r${{iter}}\"")
         lines.append("        export SCOREP_METRIC_PAPI=\"${COUNTER_SET// /,}\"")
         lines.append("        export SCOREP_EXPERIMENT_DIRECTORY=\"${RESULT_DIR}.tmp\"")
         lines.append("")
@@ -589,10 +644,7 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
         # Build Extra-P directory name
         param_parts = [f"{name}${{{name}}}" for name in var_names]
         param_str = ".".join(param_parts)
-        if args.prefix:
-            result_dir = f"{args.prefix}.{param_str}.r${{rep}}"
-        else:
-            result_dir = f"{param_str}.r${{rep}}"
+        result_dir = f"{args.prefix}.{param_str}.r${{rep}}"
 
         lines.append("    " * indent + f"RESULT_DIR=\"result/{result_dir}\"")
         lines.append("    " * indent + "export SCOREP_METRIC_PAPI=\"${COUNTER_SET// /,}\"")
@@ -635,14 +687,22 @@ def render_orchestration_script(args, selected_counters, fallback_counter_sets, 
 def main(argv=None):
     args = parse_args(argv)
 
-    is_zip_root = os.path.isfile(args.experiment_root) and zipfile.is_zipfile(args.experiment_root)
-    if not os.path.isdir(args.experiment_root) and not is_zip_root:
-        print(f"Error: experiment_root '{args.experiment_root}' not found", file=sys.stderr)
+    if not args.experiment_root and not args.counters_file:
+        print("Error: experiment_root is required unless --counters-file is given", file=sys.stderr)
         sys.exit(1)
+
+    if args.experiment_root:
+        is_zip_root = os.path.isfile(args.experiment_root) and zipfile.is_zipfile(args.experiment_root)
+        if not os.path.isdir(args.experiment_root) and not is_zip_root:
+            print(f"Error: experiment_root '{args.experiment_root}' not found", file=sys.stderr)
+            sys.exit(1)
 
     if not os.path.isfile(args.template_script):
         print(f"Error: template_script '{args.template_script}' not found", file=sys.stderr)
         sys.exit(1)
+
+    if not args.prefix:
+        args.prefix = os.path.splitext(os.path.basename(args.template_script))[0]
 
     # Determine if template is sbatch-based: explicit flags override auto-detection
     if args.sbatch:
@@ -705,41 +765,59 @@ def main(argv=None):
         )
         sys.exit(1)
 
-    # Load scores
-    selection = data_selection()
-    selection.lump_benchmarks = True
-    selection.lump_noise = True
-    selection.lump_params = True
-    selection.lump_resources = True
-    selection.lump_systems = True
-    selection.contrib_threshold = args.contribution
-    selection.visit_threshold = args.visits
+    if args.counters_file:
+        # MQM path: counters already selected by compare_to_ground_truth.py,
+        # skip NORC's resilience scoring entirely.
+        try:
+            selected_counters = load_mqm_selection(args.counters_file, args.counter_set)
+        except (OSError, IOError) as e:
+            print(f"Error reading --counters-file '{args.counters_file}': {e}", file=sys.stderr)
+            sys.exit(1)
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"Error: '{args.counters_file}' is not a valid selected_counters.json: {e}", file=sys.stderr)
+            sys.exit(1)
+        if not selected_counters:
+            print(
+                f"Error: no counters found in '{args.counters_file}' for --counter-set {args.counter_set}",
+                file=sys.stderr
+            )
+            sys.exit(1)
+    else:
+        # Load scores
+        selection = data_selection()
+        selection.lump_benchmarks = True
+        selection.lump_noise = True
+        selection.lump_params = True
+        selection.lump_resources = True
+        selection.lump_systems = True
+        selection.contrib_threshold = args.contribution
+        selection.visit_threshold = args.visits
 
-    try:
-        sgp = compute_scores(args.experiment_root, selection)
-    except Exception as e:
-        print(f"Error computing scores: {e}", file=sys.stderr)
-        sys.exit(1)
+        try:
+            sgp = compute_scores(args.experiment_root, selection)
+        except Exception as e:
+            print(f"Error computing scores: {e}", file=sys.stderr)
+            sys.exit(1)
 
-    if not sgp.scores:
-        print("Error: no scores computed from experiment", file=sys.stderr)
-        sys.exit(1)
+        if not sgp.scores:
+            print("Error: no scores computed from experiment", file=sys.stderr)
+            sys.exit(1)
 
-    # Select counters
-    selected_counters = select_counters(
-        sgp, args.top, args.min_resilience, use_cutoff=args.auto_cutoff
-    )
-    if not selected_counters:
-        selection_desc = (
-            f"--auto-cutoff (capped at --top {args.top})" if args.auto_cutoff
-            else f"--top {args.top}"
+        # Select counters
+        selected_counters = select_counters(
+            sgp, args.top, args.min_resilience, use_cutoff=args.auto_cutoff
         )
-        print(
-            f"Error: no counters selected with {selection_desc} and "
-            f"--min-resilience {args.min_resilience}",
-            file=sys.stderr
-        )
-        sys.exit(1)
+        if not selected_counters:
+            selection_desc = (
+                f"--auto-cutoff (capped at --top {args.top})" if args.auto_cutoff
+                else f"--top {args.top}"
+            )
+            print(
+                f"Error: no counters selected with {selection_desc} and "
+                f"--min-resilience {args.min_resilience}",
+                file=sys.stderr
+            )
+            sys.exit(1)
 
     # Expand variable combinations
     combinations = expand_combinations(args.var)
@@ -759,9 +837,13 @@ def main(argv=None):
         f"PAPI_{c}" if not c.startswith("PAPI_") else c
         for c, _ in selected_counters
     ]
-    with open_experiment_source(args.experiment_root) as tree:
-        metrics_cfg_path = os.path.join(tree.root, "config", "metrics.cfg")
-        cfg_groups = parse_metrics_cfg_from_tree(tree, metrics_cfg_path)
+    if args.experiment_root:
+        with open_experiment_source(args.experiment_root) as tree:
+            metrics_cfg_path = os.path.join(tree.root, "config", "metrics.cfg")
+            cfg_groups = parse_metrics_cfg_from_tree(tree, metrics_cfg_path)
+    else:
+        metrics_cfg_path = "(no experiment_root given)"
+        cfg_groups = []
     if cfg_groups:
         fallback_counter_sets = group_counters_via_metrics_cfg(counters_with_prefix, cfg_groups)
     else:
@@ -774,7 +856,8 @@ def main(argv=None):
 
     # Render the orchestration script
     script_content = render_orchestration_script(
-        args, selected_counters, fallback_counter_sets, combinations, template, is_sbatch
+        args, selected_counters, fallback_counter_sets, combinations, template, is_sbatch,
+        from_mqm=bool(args.counters_file)
     )
 
     # Write the output script
@@ -790,7 +873,9 @@ def main(argv=None):
     print(f"Generated orchestration script: {args.output}")
     print(f"Template: {args.template_script} ({'sbatch' if is_sbatch else 'shell'})")
     print(f"Template variables found: {sorted(template_vars) if template_vars else 'none'}")
-    if args.auto_cutoff:
+    if args.counters_file:
+        print(f"Counter selection: MQM '{args.counters_file}' (--counter-set {args.counter_set})")
+    elif args.auto_cutoff:
         print(f"Counter selection: cutoff detection (capped at --top {args.top})")
     print(f"Selected {len(selected_counters)} counter(s): {', '.join(c for c, _ in selected_counters)}")
     print(f"Parameter combinations: {len(combinations)}")

@@ -146,15 +146,16 @@ plan are **not** implemented here yet.
      then falls back to whatever's already on the job's default PATH.
 
    ```
-   ./submit_calibration_job.sh <system> <experiment_root> [extra run_benchmarks.py args...]
-   ./submit_calibration_job.sh <system> --counters PAPI_A,PAPI_B,... [extra args...]
-   ./submit_calibration_job.sh <system> --counters-file counters.list [extra args...]
+   ./submit_calibration_job.sh <system> <experiment_root> [--local] [extra run_benchmarks.py args...]
+   ./submit_calibration_job.sh <system> --counters PAPI_A,PAPI_B,... [--experiment-root DIR | --local] [extra args...]
+   ./submit_calibration_job.sh <system> --counters-file counters.list [--experiment-root DIR | --local] [extra args...]
    ./submit_calibration_job.sh <system> --resume exec_dir [extra args...]
    # e.g.
    ./submit_calibration_job.sh gh result/kripke.gh
    ./submit_calibration_job.sh local result/kripke.local --multipliers 1,2,4,8,16
    ./submit_calibration_job.sh gh --counters TOT_CYC,TOT_INS,L1_DCM
-   ./submit_calibration_job.sh gh --resume exec/polybench.gh.20260802_014925
+   ./submit_calibration_job.sh gh result/kripke.gh --local
+   ./submit_calibration_job.sh gh --resume result/kripke.gh/modeling_quality/polybench.gh.20260802_014925
    ```
 
    `--counters`/`--counters-file` skip `generate_papi_counters.py` (and the
@@ -173,11 +174,20 @@ plan are **not** implemented here yet.
    `--output-dir`), so `run_benchmarks.py` finds its own `results.jsonl` there
    and skips whatever's already `OK` in it instead of redoing it.
 
-   Everything from this run -- not just the raw results -- is kept under one
+   **Storage location.** By default, results are stored inside the NORC
+   experiment itself, under `<experiment_root>/modeling_quality/`, so they sit
+   next to the rest of that experiment's data (and travel with it if it's
+   copied/archived). `--local` stores under this script's own
+   `modeling_quality/exec/` instead. When using `--counters`/`--counters-file`
+   (no positional `<experiment_root>`), pass `--experiment-root DIR` to still
+   default into `DIR/modeling_quality/`; without it, those two modes fall back
+   to `--local`'s `exec/` location, since there's no experiment to store into.
+
+   Everything from a run -- not just the raw results -- is kept under one
    directory instead of being scattered into `benchmarks/polybench/`:
 
    ```
-   modeling_quality/exec/polybench.<system>.<timestamp>/
+   <experiment_root>/modeling_quality/polybench.<system>.<timestamp>/   # or modeling_quality/exec/... with --local
    ├── job.sh
    ├── status_out/, status_err/        # SLURM stdout/stderr
    ├── papi_counters.list              # written pre-submission, see step 1
@@ -186,8 +196,10 @@ plan are **not** implemented here yet.
        ├── results.jsonl                #   incremental log; re-running resumes from it
        ├── results.json, time_results.csv, papi_results.csv
        ├── results_extrap.json          #   Phase 4: to_extrap.py's output
+       ├── metric_ranking_by_deviation.json
+       ├── selected_counters.json          # {"rule_based": {...}, "clustered": {...}}
        └── deviations.csv, deviation_by_metric.png, exponent_accuracy.png,
-           deviation_heatmap.png        #   Phase 4: compare_to_ground_truth.py's output
+           deviation_heatmap.pdf, metric_clustering.pdf   # Phase 4: compare_to_ground_truth.py's output
    ```
 
    The job script deletes `build/` afterwards unless `--keep-build` is passed

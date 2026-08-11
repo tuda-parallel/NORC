@@ -191,12 +191,9 @@ class main_window(QMainWindow):
         return True
 
     def open_generate_dialog(self):
-        if not self.appstate.plt_mgr.experiment_root:
-            dlg = QMessageBox(self)
-            dlg.setText("Please open an experiment before creating a measurement runner.")
-            dlg.exec()
-            return
-
+        # No experiment needs to be open: generate_dialog also supports
+        # selecting counters from an MQM selected_counters.json instead of
+        # NORC's resilience analysis, which needs no experiment_root.
         dialog = generate_dialog(self.appstate, self)
         dialog.exec()
 

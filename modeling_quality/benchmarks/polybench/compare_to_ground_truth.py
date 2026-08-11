@@ -265,6 +265,48 @@ def plot_redundancy_heatmap(all_pairs, metrics, out_path):
     print(f"wrote {out_path}")
 
 
+EFFORT_COUNTER_CATEGORIES = {
+    "Total instructions": ("PAPI_TOT_INS", []),
+    "Branch instructions": ("PAPI_BR_INS", ["PAPI_BR_TKN", "PAPI_BR_NTK", "PAPI_BR_CN", "PAPI_BR_UCN"]),
+    "Floating-point operations": (
+        "PAPI_FP_OPS",
+        ["PAPI_FP_INS", "PAPI_DP_OPS", "PAPI_SP_OPS", "PAPI_VEC_DP", "PAPI_VEC_SP"],
+    ),
+    "Integer operations": ("PAPI_INT_INS", []),
+    "Load instructions": (
+        "PAPI_LD_INS",
+        ["PAPI_L1_DCR", "PAPI_L2_DCR", "PAPI_L3_DCR", "PAPI_L1_TCR", "PAPI_L2_TCR", "PAPI_L3_TCR",
+         "PAPI_LST_INS", "PAPI_L1_DCA", "PAPI_L2_DCA", "PAPI_L3_DCA", "PAPI_L1_TCA", "PAPI_L2_TCA", "PAPI_L3_TCA"],
+    ),
+    "Store instructions": (
+        "PAPI_SR_INS",
+        ["PAPI_L1_DCW", "PAPI_L2_DCW", "PAPI_L3_DCW", "PAPI_L1_TCW", "PAPI_L2_TCW", "PAPI_L3_TCW",
+         "PAPI_LST_INS", "PAPI_L1_DCA", "PAPI_L2_DCA", "PAPI_L3_DCA", "PAPI_L1_TCA", "PAPI_L2_TCA", "PAPI_L3_TCA"],
+    ),
+}
+
+
+def select_rule_based(metric_to_mad, max_mad=0.5):
+    """Pick one counter per effort category (recommended, else lowest-MAD
+    available alternative) among counters with mean-abs-deviation <= max_mad.
+
+    Returns {category: (counter, mad)} for categories with an eligible counter.
+    """
+    selected = {}
+    for category, (recommended, alternatives) in EFFORT_COUNTER_CATEGORIES.items():
+        candidates = [recommended] + alternatives
+        eligible = [(c, metric_to_mad[c]) for c in candidates if c in metric_to_mad and metric_to_mad[c] <= max_mad]
+        if eligible:
+            selected[category] = min(eligible, key=lambda cm: cm[1])
+    return selected
+
+
+def print_rule_based_selection(selected):
+    print("\nRule-based selection (recommended counter per category, else best alternative):")
+    for category, (counter, mad) in sorted(selected.items(), key=lambda kv: kv[1][1]):
+        print(f"  {category:<28}{counter:<16}MAD={mad:.3f}")
+
+
 ACCURACY_CRITERIA = [
     ("exact match", lambda d: d == 0),
     ("|deviation| <= 0.25", lambda d: abs(d) <= 0.25),
@@ -496,6 +538,8 @@ def cluster_metrics_by_deviation(deviations_by_metric, kernels, out_path, n_clus
     for cluster_id in sorted(numpy.unique(clusters), key=lambda c: metric_to_mad[cluster_reps[c]]):
         rep = cluster_reps[cluster_id]
         print(f"  Cluster {cluster_id}: {rep} (MAD={metric_to_mad[rep]:.3f})")
+
+    return {int(cluster_id): (rep, float(metric_to_mad[rep])) for cluster_id, rep in cluster_reps.items()}
 
 
 def cluster_metrics_by_deviation2(deviations_by_metric, kernels, out_path, n_clusters=None):
@@ -748,6 +792,10 @@ def main():
         json.dump(ranking_data, f, indent=2)
     print(f"wrote {ranking_file}")
 
+    metric_to_mad = {metric: mean_abs_dev for metric, mean_abs_dev, _ in summary}
+    rule_based_selection = select_rule_based(metric_to_mad)
+    print_rule_based_selection(rule_based_selection)
+
     # corr_threshold = 0.7
     # # Detect redundancy across all metrics (full correlation analysis with threshold=0.0)
     # redundant_pairs_all, selected_metrics = find_redundant_metrics(rows, summary_for_output, threshold=corr_threshold)
@@ -771,18 +819,34 @@ def main():
     plot_accuracy(deviations_by_metric, results_dir / "exponent_accuracy.png")
     write_csv(rows, results_dir / "deviations.csv")
 
+    kernels = sorted({k for k, _ in deviations})
+
     if args.heatmap:
-        kernels = sorted({k for k, _ in deviations})
         metrics = sorted(
             deviations_by_metric,
             key=lambda m: numpy.mean(numpy.abs(deviations_by_metric[m])),
         )
         plot_heatmap(deviations, kernels, metrics, results_dir / "deviation_heatmap.pdf", deviations_by_metric)
-        # Cluster only cutoff metrics
-        cutoff_metrics = {m for m, _, _ in summary_for_output if m != 'time'}
-        deviations_by_metric_cutoff = {m: v for m, v in deviations_by_metric.items() if m in cutoff_metrics}
-        cluster_metrics_by_deviation(deviations_by_metric_cutoff, kernels, results_dir / "metric_clustering.pdf",
-                                     n_clusters=args.cluster_count)
+
+    # Clustering produces the clustered counter set independently of the
+    # heatmap plot, so --no-heatmap doesn't also drop it.
+    cutoff_metrics = {m for m, _, _ in summary_for_output if m != 'time'}
+    deviations_by_metric_cutoff = {m: v for m, v in deviations_by_metric.items() if m in cutoff_metrics}
+    cluster_reps = cluster_metrics_by_deviation(deviations_by_metric_cutoff, kernels, results_dir / "metric_clustering.pdf",
+                                                n_clusters=args.cluster_count)
+
+    selected_file = results_dir / "selected_counters.json"
+    with open(selected_file, "w") as f:
+        json.dump(
+            {
+                "rule_based": {category: {"counter": counter, "mean_abs_deviation": mad}
+                                for category, (counter, mad) in rule_based_selection.items()},
+                "clustered": {str(cluster_id): {"counter": counter, "mean_abs_deviation": mad}
+                               for cluster_id, (counter, mad) in cluster_reps.items()},
+            },
+            f, indent=2,
+        )
+    print(f"wrote {selected_file}")
 
 
 if __name__ == "__main__":
