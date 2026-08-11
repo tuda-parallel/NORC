@@ -110,9 +110,14 @@ sweeping the *medium* preset problem size by factors **1, 2, 4, 8, 16**, with Op
 the number of available cores. It then models each counter per kernel with the basic Extra-P modeler
 and compares against the ground-truth model via the lead-exponent deviation:
 
-$$\mathrm{ED}(f,g) = e^{*}_f - e^{*}_g, \qquad e^{*}_f = \max_k \{ i_k \mid c_k \neq 0 \}$$
+```
+ED(f, g) = e*(f) - e*(g)      with   e*(f) = max{ i_k : c_k != 0 }
+```
 
-Counters with **MAED > 0.5** are discarded (asymptotically off by $O(\sqrt{n})$). The remainder is
+where `e*` is the *leading exponent*, i.e. the exponent of the dominant polynomial term of the model
+(logarithms are dominated by any polynomial). MAED is the mean absolute ED over the kernels.
+
+Counters with **MAED > 0.5** are discarded (asymptotically off by `O(sqrt(n))`). The remainder is
 reduced either by hierarchical clustering (Ward's method on the Euclidean distance of the per-kernel
 exponent deviations, cut to **6 clusters** by default, each cluster represented by its lowest-MAED
 counter) or by the rule-based selection over the six effort-counter categories
@@ -159,13 +164,16 @@ Extra-P needs **≥ 5 values per parameter** and **≥ 4 repetitions** per point
 
 | App | System | Parameters |
 |---|---|---|
-| Kripke  | LB2 | $Z_p \in \{8^3,16^3,24^3,32^3,40^3\}$, $G \in \{16,32,48,64,80\}$, $p \in \{2,4,8,16,32\}$, $D=128$, $M=25$, 52 threads/rank |
-| Kripke  | GH  | $Z_p \in \{4^3,8^3,12^3,16^3,20^3\}$, $G \in \{24,32,40,48,56\}$, $p \in \{1,2,4,8,16\}$, $D=128$, $M=25$, 2 threads/rank |
-| RELeARN | LB2 | $N \in \{250,500,750,1000,1250\}$, $p \in \{2,4,8,16,32\}$, 12 threads/rank |
-| RELeARN | GH  | $N \in \{250,500,750,1000,1250\}$, $p \in \{1,2,4,8,16\}$, 2 threads/rank |
+| Kripke  | LB2 | `Zp = 8^3, 16^3, 24^3, 32^3, 40^3`; `G = 16, 32, 48, 64, 80`; `p = 2, 4, 8, 16, 32`; `D = 128`, `M = 25`, 52 threads/rank |
+| Kripke  | GH  | `Zp = 4^3, 8^3, 12^3, 16^3, 20^3`; `G = 24, 32, 40, 48, 56`; `p = 1, 2, 4, 8, 16`; `D = 128`, `M = 25`, 2 threads/rank |
+| RELeARN | LB2 | `N = 250, 500, 750, 1000, 1250`; `p = 2, 4, 8, 16, 32`; 12 threads/rank |
+| RELeARN | GH  | `N = 250, 500, 750, 1000, 1250`; `p = 1, 2, 4, 8, 16`; 2 threads/rank |
 
-Held-out evaluation points: Kripke $Z_p=48^3, G=96, p=64$ (LB2) and $Z_p=24^3, G=64, p=32$ (GH);
-RELeARN $N=1500, p=64$ (LB2) and $N=1500, p=32$ (GH).
+`Zp` is zones per rank (Extra-P targets weak scaling), `G` the number of energy groups, `D` the
+directions, `M` the scattering moments, `N` the neurons per rank, and `p` the number of MPI ranks.
+
+Held-out evaluation points: Kripke `Zp=48^3, G=96, p=64` (LB2) and `Zp=24^3, G=64, p=32` (GH);
+RELeARN `N=1500, p=64` (LB2) and `N=1500, p=32` (GH).
 
 ---
 
@@ -194,9 +202,9 @@ constraint.
   more than halve the mean exponent deviation on GH and reduce it to roughly a third on LB2.
 - Kripke: rule-based + top exponent + 2 HWC models gives max MAED 0.11 across parameters on GH
   (baseline 0.28, or 0.94 with negative coefficients allowed) and up to **75 % lower relative error**.
-- RELeARN (LB2): HWC models yield $N\cdot\log(N)^2$ (clustered) and $N\cdot\log(N)^2 + p^{1/4}$
-  (rule-based) versus the ground truth $N \cdot \log(N \cdot p)$, both closer than the time-only
-  baseline $N^{5/4} + N^{5/4}\log(p)$ (ED 0.25 in $N$).
+- RELeARN (LB2): HWC models yield `N*log(N)^2` (clustered) and `N*log(N)^2 + p^(1/4)` (rule-based)
+  versus the ground truth `N*log(N*p)`, both closer than the time-only baseline
+  `N^(5/4) + N^(5/4)*log(p)` (ED 0.25 in `N`).
 - Overall recommendation: **rule-based counter set, top-exponent strategy, 2–3 HWC models, no `TOT_CYC`.**
 
 Because the underlying measurements carry run-to-run variability, re-running the campaigns yields
