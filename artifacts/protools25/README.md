@@ -1,6 +1,6 @@
 # Artifacts Reproducibility
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.16786108.svg)]()
+![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.16786108.svg)
 
 
 Below, we describe how to reproduce the results from the Paper entitled:
