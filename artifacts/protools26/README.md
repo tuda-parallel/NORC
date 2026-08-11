@@ -34,7 +34,9 @@ Results were produced on two systems:
    [installation instructions](https://github.com/tuda-parallel/NORC?tab=readme-ov-file#installation).
    The analysis component provides the CLI entry points used below:
    `norc_gui`, `norc_analyze`, `norc_rank`, `norc_plot`, `norc_generate`, `norc_calc_time`.
-2. **Extra-P** with the HWC-based modeling extension (see [Stage D](#stage-d--hwc-based-modeling-in-extra-p)).
+2. **Extra-P** with the HWC-based modeling extension:
+   [`extra-p/extrap`, branch `feature/hwc-modeling`](https://github.com/extra-p/extrap/tree/feature/hwc-modeling)
+   (see [Stage D](#stage-d--hwc-based-modeling-in-extra-p)).
 3. **Measurement stack** (only needed if you re-run measurements, not for re-analyzing our data):
    Score-P ≥ 8.0 with PAPI support, PAPI, SIONlib, Cube, MPI, OpenMP-capable compiler, Slurm (optional),
    Python ≥ 3.11. On GH, dependencies are installed automatically via Spack (`%gcc@11.4.0`).
@@ -47,20 +49,23 @@ Results were produced on two systems:
 
 ### Getting the data set
 
-Download the archive from Zenodo (**DOI: TBD — see [Uploads still required](#uploads-still-required)**)
-and unzip it:
+Download the archive from Zenodo (**DOI:
+[10.5281/zenodo.21886223](https://doi.org/10.5281/zenodo.21886223)**) and unzip it:
 
 ```sh
-wget <zenodo-files-archive-url>
+wget https://zenodo.org/records/21886223/files/data.zip
 unzip data.zip
 ```
+
+The GH NORC experiment is reused as-is from ProTools '25 and is **not** in the record above; fetch it
+separately from <https://zenodo.org/records/16786109>.
 
 Expected layout:
 
 ```sh
 data
 ├── norc_experiment_lichtenberg_omp_scaled.zip   # Stage A/B input, LB2
-├── NORC_experiment_gracehopper.zip              # Stage A/B input, GH (reused from ProTools '25)
+├── NORC_experiment_gracehopper.zip              # Stage A/B input, GH (from the ProTools '25 record)
 ├── mqm_polybench_lb2/                           # Stage B PolyBench counter measurements, LB2
 ├── mqm_polybench_gh/                            # Stage B PolyBench counter measurements, GH
 ├── kripke_lb2/ , kripke_gh/                     # Stage C/D Extra-P measurement trees
@@ -89,6 +94,9 @@ norc_rank NORC_experiment_gracehopper.zip           -v 100 -c 1
 
 `-v 100 -c 1` restricts scoring to call paths with ≥ 100 visits and ≥ 1 % runtime contribution.
 Add `--tex` to emit the LaTeX table used in the paper.
+
+The cutoff row is marked automatically in `norc_rank`'s CLI/table output; add `--plot [FILE]` to see (or
+save) the resilience curve with the cutoff line, same as the GUI's Ranking tab.
 
 **Expected result:** cutoff at resilience ≈ **0.79** on LB2 and ≈ **0.94** on GH — the reason a fixed
 threshold (e.g. 0.9) is not used by default.
@@ -155,10 +163,18 @@ norc_generate <experiment.zip> <template_script> \
     --iterations 5 -o measure.sh
 ```
 
-Relevant flags: `--top` / `--min-resilience` (counter selection), `--var name=v1,v2,...` (repeatable,
-one per placeholder, includes `ntasks`), `--iterations` (repetitions per configuration, ≥ 4 recommended),
-`--sbatch` / `--no-sbatch` (override auto-detection), `--prefix` (Extra-P result directory prefix).
-See `protools25_data/measure.sh` for a generated example.
+Relevant flags: `--top` / `--min-resilience` (counter selection by NORC resilience; `--auto-cutoff` selects
+up to the resilience-curve cutoff instead of a fixed `--top`), `--var name=v1,v2,...` (repeatable, one per
+placeholder, includes `ntasks`), `--iterations` (repetitions per configuration, ≥ 4 recommended),
+`--sbatch` / `--no-sbatch` (override auto-detection), `--prefix` (Extra-P result directory prefix),
+`-o/--output` (wrapper script path, default `measure.sh`), `--no-log-capture` (keep the template's own
+`#SBATCH -o/-e` directives instead of redirecting into `logs/`).
+
+To generate directly from the Stage B counter selection instead of re-scoring resilience, pass
+`--counters-file <path to selected_counters.json>` (written by
+`modeling_quality/benchmarks/polybench/compare_to_ground_truth.py`) with `--counter-set
+{rule_based,clustered,both}` (default `rule_based`); this ignores `--top`/`--min-resilience`/`-c`/`-v`/
+`--auto-cutoff` and `experiment_root` becomes optional.
 
 Extra-P needs **≥ 5 values per parameter** and **≥ 4 repetitions** per point. The evaluation used:
 
@@ -209,31 +225,3 @@ constraint.
 
 Because the underlying measurements carry run-to-run variability, re-running the campaigns yields
 close but not bit-identical numbers. Re-analyzing the published data reproduces the paper exactly.
-
----
-
-## Uploads still required
-
-The following are referenced above but are **not yet published**; they must be uploaded before the
-artifact is complete:
-
-- [ ] **Zenodo record for ProTools '26** — a new DOI is needed. The badge/DOI in this README and the
-      footnote in `content/07_acknowledgement.tex` of the paper (currently marked
-      `\textcolor{red}{update}` and still pointing at the ProTools '25 record
-      [10.5281/zenodo.16786108](https://doi.org/10.5281/zenodo.16786108)) must be updated.
-- [ ] **LB2 NORC experiment** `norc_experiment_lichtenberg_omp_scaled.zip` — used for the LB2 score
-      plot and as MQM input. Not present in this repository.
-- [ ] **GH NORC experiment** — `NORC_experiment_gracehopper.zip` exists locally
-      (`protools25_data/`, and an untracked copy in `analysis/`) but is not committed; it is 2 GB and
-      belongs on Zenodo, not in git.
-- [ ] **MQM PolyBench measurements** for LB2 and GH (counter values, MAED tables, clustering results).
-- [ ] **Extra-P measurement trees** for Kripke and RELeARN on both systems, plus the held-out
-      evaluation points.
-- [ ] **NORC MQM implementation** — the modeling-quality module (knee-based cutoff, PolyBench harness,
-      lead-exponent deviation, Ward clustering, rule-based selection) is described in Sec. III-A/III-B
-      but is not yet in this repository. `norc_generate` (Stage C) is present; `norc_rank` currently
-      has no knee-detection flag.
-- [ ] **Extra-P HWC-modeling extension** — the branch/release implementing the coefficient-stripping
-      modeler with the top-value / top-exponent strategies must be published and linked here.
-- [ ] **Plot scripts** for the paper figures (score plots, deviation heatmaps, dendrograms, the
-      PolyBench/Kripke/RELeARN MAED and relative-error plots).
